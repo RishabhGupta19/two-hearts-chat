@@ -21,7 +21,7 @@ export function friendlyError(err) {
     return 'Your session has expired. Please log in again.';
   }
   if (status === 403) {
-    return 'You don't have permission to do that.';
+    return 'You do not have permission to do that.';
   }
 
   // Not found

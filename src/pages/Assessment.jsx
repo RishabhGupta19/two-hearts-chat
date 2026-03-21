@@ -86,7 +86,7 @@ const Assessment = () => {
       }
     } catch (e) {
       console.error('Submit error:', e);
-      setError(e.response?.data?.error || e.message || 'Failed to submit.');
+      setError(friendlyError(e));
     } finally {
       setSubmitting(false);
     }
