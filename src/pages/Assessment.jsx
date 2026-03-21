@@ -6,6 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
 import api from '@/api';
+import { friendlyError } from '@/utils/errorMessages';
 
 const Assessment = () => {
   const [questions, setQuestions] = useState([]);
