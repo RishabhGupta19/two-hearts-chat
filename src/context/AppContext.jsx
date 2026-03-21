@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import api from '@/api';
 
 const AppContext = createContext(null);
 
@@ -10,6 +11,7 @@ export const useApp = () => {
 
 const defaultState = {
   isAuthenticated: false,
+  user: null,
   userName: '',
   userEmail: '',
   userRole: null,
@@ -17,124 +19,197 @@ const defaultState = {
   partnerName: '',
   isLinked: false,
   assessmentCompleted: false,
-  assessmentAnswers: {},
+  assessmentProfile: null,
   mode: 'calm',
   messages: [],
   goals: [],
-};
-
-// Helper to load persisted state and merge with defaults so optional fields are always present
-const loadPersistedState = () => {
-  try {
-    const saved = localStorage.getItem('ustwo_state');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Restore dates in messages if they ever get persisted in the future
-      if (parsed.messages) {
-        parsed.messages = parsed.messages.map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
-      }
-      return { ...defaultState, ...parsed };
-    }
-  } catch (e) { /* ignore */ }
-  return defaultState;
+  loading: true,
 };
 
 export const AppProvider = ({ children }) => {
-  const [state, setState] = useState(() => loadPersistedState());
+  const [state, setState] = useState(defaultState);
 
-  // Persist key state to localStorage
+  // On mount, check for existing token and fetch user
   useEffect(() => {
-    const toPersist = {
-      isAuthenticated: state.isAuthenticated,
-      userName: state.userName,
-      userEmail: state.userEmail,
-      userRole: state.userRole,
-      coupleId: state.coupleId,
-      partnerName: state.partnerName,
-      isLinked: state.isLinked,
-      assessmentCompleted: state.assessmentCompleted,
-      assessmentAnswers: state.assessmentAnswers,
-      goals: state.goals,
-      // Don't persist messages or mode — those are session-only
-    };
-    localStorage.setItem('ustwo_state', JSON.stringify(toPersist));
-  }, [state.isAuthenticated, state.userName, state.userRole, state.coupleId, state.partnerName, state.isLinked, state.assessmentCompleted, state.assessmentAnswers, state.goals]);
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      fetchUser();
+    } else {
+      setState((s) => ({ ...s, loading: false }));
+    }
+  }, []);
 
-  const login = useCallback((name, email) => {
-    setState(s => ({ ...s, isAuthenticated: true, userName: name, userEmail: email }));
+  const syncUserState = (user) => {
+    setState((s) => ({
+      ...s,
+      isAuthenticated: true,
+      user,
+      userName: user.name || '',
+      userEmail: user.email || '',
+      userRole: user.role || null,
+      coupleId: user.couple_id || null,
+      partnerName: user.partner_name || '',
+      isLinked: user.is_linked || false,
+      assessmentCompleted: user.assessment_completed || false,
+      assessmentProfile: user.assessment_profile || null,
+      loading: false,
+    }));
+  };
+
+  const fetchUser = async () => {
+    try {
+      const { data } = await api.get('/auth/me');
+      syncUserState(data.user || data);
+    } catch {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      setState((s) => ({ ...s, ...defaultState, loading: false }));
+    }
+  };
+
+  const register = useCallback(async (name, email, password) => {
+    const { data } = await api.post('/auth/register', { name, email, password });
+    localStorage.setItem('access_token', data.access);
+    localStorage.setItem('refresh_token', data.refresh);
+    syncUserState(data.user);
+  }, []);
+
+  const login = useCallback(async (email, password) => {
+    const { data } = await api.post('/auth/login', { email, password });
+    localStorage.setItem('access_token', data.access);
+    localStorage.setItem('refresh_token', data.refresh);
+    syncUserState(data.user);
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('ustwo_state');
-    setState({ ...defaultState });
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    setState({ ...defaultState, loading: false });
   }, []);
 
-  const setRole = useCallback((role) => {
-    setState(s => ({ ...s, userRole: role }));
+  const setRole = useCallback(async (role) => {
+    const { data } = await api.put('/auth/role', { role });
+    syncUserState(data.user || data);
   }, []);
 
-  const generateCoupleId = useCallback(() => {
-    const id = '#' + Math.random().toString(36).substring(2, 8).toUpperCase();
-    setState(s => ({ ...s, coupleId: id }));
-    return id;
+  const generateCoupleId = useCallback(async () => {
+    const { data } = await api.post('/couple/generate-code');
+    setState((s) => ({ ...s, coupleId: data.code }));
+    return data.code;
   }, []);
 
-  const linkPartner = useCallback((code, partnerName) => {
-    if (code.length >= 7) {
-      setState(s => ({ ...s, coupleId: code, partnerName, isLinked: true }));
-      return true;
-    }
-    return false;
+  const linkPartner = useCallback(async (code, partnerName) => {
+    const { data } = await api.post('/couple/link', { code, partner_name: partnerName });
+    setState((s) => ({
+      ...s,
+      coupleId: data.couple_id,
+      partnerName,
+      isLinked: true,
+    }));
+    return true;
   }, []);
 
-  const completeAssessment = useCallback((answers) => {
-    setState(s => ({ ...s, assessmentCompleted: true, assessmentAnswers: answers }));
+  const completeAssessment = useCallback((profile) => {
+    setState((s) => ({ ...s, assessmentCompleted: true, assessmentProfile: profile }));
   }, []);
 
   const setMode = useCallback((mode) => {
-    setState(s => ({ ...s, mode }));
+    setState((s) => ({ ...s, mode }));
   }, []);
 
-  const addMessage = useCallback((msg) => {
-    const newMsg = {
-      ...msg,
-      id: Date.now().toString(),
-      timestamp: new Date(),
-      mode: state.mode,
-    };
-    setState(s => ({ ...s, messages: [...s.messages, newMsg] }));
+  // Fetch messages from API by mode
+  const fetchMessages = useCallback(async (mode) => {
+    try {
+      const { data } = await api.get('/messages', { params: { mode } });
+      setState((s) => ({
+        ...s,
+        messages: data.messages || data,
+      }));
+    } catch (e) {
+      console.error('Failed to fetch messages:', e);
+    }
+  }, []);
+
+  const sendMessage = useCallback(async (text) => {
+    try {
+      // Save user message
+      const { data: userMsg } = await api.post('/messages', { text, mode: state.mode });
+      setState((s) => ({ ...s, messages: [...s.messages, userMsg] }));
+
+      // Get AI response
+      const { data: aiMsg } = await api.post('/chat/ai-respond', { message: text, mode: state.mode });
+      setState((s) => ({ ...s, messages: [...s.messages, aiMsg] }));
+      return aiMsg;
+    } catch (e) {
+      console.error('Failed to send message:', e);
+      throw e;
+    }
   }, [state.mode]);
 
-  const clearMessages = useCallback(() => {
-    setState(s => ({ ...s, messages: s.messages.filter(m => m.mode !== s.mode), mode: 'calm' }));
+  const resolveVent = useCallback(async () => {
+    try {
+      await api.post('/chat/resolve');
+      setState((s) => ({ ...s, mode: 'calm' }));
+    } catch (e) {
+      console.error('Failed to resolve:', e);
+    }
   }, []);
 
-  const currentMessages = state.messages.filter(m => m.mode === state.mode);
+  const currentMessages = state.messages;
 
-  const addGoal = useCallback((text, tag) => {
-    const goal = {
-      id: Date.now().toString(),
-      text,
-      tag,
-      setBy: state.userRole,
-      date: new Date().toLocaleDateString(),
-      completed: false,
-    };
-    setState(s => ({ ...s, goals: [...s.goals, goal] }));
-  }, [state.userRole]);
+  // Goals
+  const fetchGoals = useCallback(async () => {
+    try {
+      const { data } = await api.get('/goals');
+      setState((s) => ({ ...s, goals: data.goals || data }));
+    } catch (e) {
+      console.error('Failed to fetch goals:', e);
+    }
+  }, []);
 
-  const toggleGoalComplete = useCallback((id) => {
-    setState(s => ({
-      ...s,
-      goals: s.goals.map(g => g.id === id ? { ...g, completed: !g.completed } : g),
-    }));
+  const addGoal = useCallback(async (text, tag) => {
+    try {
+      const { data } = await api.post('/goals', { text, tag });
+      setState((s) => ({ ...s, goals: [...s.goals, data] }));
+    } catch (e) {
+      console.error('Failed to add goal:', e);
+    }
+  }, []);
+
+  const toggleGoalComplete = useCallback(async (id) => {
+    try {
+      const { data } = await api.patch(`/goals/${id}/toggle`);
+      setState((s) => ({
+        ...s,
+        goals: s.goals.map((g) => (g.id === id ? data : g)),
+      }));
+    } catch (e) {
+      console.error('Failed to toggle goal:', e);
+    }
   }, []);
 
   return (
-    <AppContext.Provider value={{
-      ...state, login, logout, setRole, generateCoupleId, linkPartner,
-      completeAssessment, setMode, addMessage, clearMessages, currentMessages, addGoal, toggleGoalComplete,
-    }}>
+    <AppContext.Provider
+      value={{
+        ...state,
+        register,
+        login,
+        logout,
+        setRole,
+        generateCoupleId,
+        linkPartner,
+        completeAssessment,
+        setMode,
+        sendMessage,
+        fetchMessages,
+        resolveVent,
+        currentMessages,
+        addGoal,
+        toggleGoalComplete,
+        fetchGoals,
+        fetchUser,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );
