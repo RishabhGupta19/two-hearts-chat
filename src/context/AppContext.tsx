@@ -130,18 +130,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setState(s => ({ ...s, mode }));
   }, []);
 
-  const addMessage = useCallback((msg: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+  const addMessage = useCallback((msg: Omit<ChatMessage, 'id' | 'timestamp' | 'mode'>) => {
     const newMsg: ChatMessage = {
       ...msg,
       id: Date.now().toString(),
       timestamp: new Date(),
+      mode: state.mode,
     };
     setState(s => ({ ...s, messages: [...s.messages, newMsg] }));
-  }, []);
+  }, [state.mode]);
 
   const clearMessages = useCallback(() => {
-    setState(s => ({ ...s, messages: [], mode: 'calm' }));
+    setState(s => ({ ...s, messages: s.messages.filter(m => m.mode !== s.mode), mode: 'calm' }));
   }, []);
+
+  const currentMessages = state.messages.filter(m => m.mode === state.mode);
 
   const addGoal = useCallback((text: string, tag: GoalTag) => {
     const goal: Goal = {
