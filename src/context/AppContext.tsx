@@ -59,8 +59,9 @@ interface AppContextType extends AppState {
   linkPartner: (code: string, partnerName: string) => boolean;
   completeAssessment: (answers: AssessmentAnswers) => void;
   setMode: (mode: AppMode) => void;
-  addMessage: (msg: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
+  addMessage: (msg: Omit<ChatMessage, 'id' | 'timestamp' | 'mode'>) => void;
   clearMessages: () => void;
+  currentMessages: ChatMessage[];
   addGoal: (text: string, tag: GoalTag) => void;
   toggleGoalComplete: (id: string) => void;
 }
