@@ -24,7 +24,7 @@ Example final response:
 
 Start by warmly greeting the user and asking your first question about how they handle being upset.`;
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

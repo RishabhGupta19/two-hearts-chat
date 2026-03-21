@@ -8,22 +8,6 @@ export const useApp = () => {
   return ctx;
 };
 
-// Helper to load persisted state
-const loadPersistedState = () => {
-  try {
-    const saved = localStorage.getItem('ustwo_state');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Restore dates in messages
-      if (parsed.messages) {
-        parsed.messages = parsed.messages.map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
-      }
-      return parsed;
-    }
-  } catch (e) { /* ignore */ }
-  return null;
-};
-
 const defaultState = {
   isAuthenticated: false,
   userName: '',
@@ -39,8 +23,24 @@ const defaultState = {
   goals: [],
 };
 
+// Helper to load persisted state and merge with defaults so optional fields are always present
+const loadPersistedState = () => {
+  try {
+    const saved = localStorage.getItem('ustwo_state');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Restore dates in messages if they ever get persisted in the future
+      if (parsed.messages) {
+        parsed.messages = parsed.messages.map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
+      }
+      return { ...defaultState, ...parsed };
+    }
+  } catch (e) { /* ignore */ }
+  return defaultState;
+};
+
 export const AppProvider = ({ children }) => {
-  const [state, setState] = useState(() => loadPersistedState() || defaultState);
+  const [state, setState] = useState(() => loadPersistedState());
 
   // Persist key state to localStorage
   useEffect(() => {
