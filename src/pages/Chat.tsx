@@ -64,27 +64,25 @@ const Chat = () => {
     <ModeWrapper>
       <div className="flex flex-col h-screen">
         {/* Top bar */}
-        <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm z-10">
-          <div className="flex items-center gap-3">
+        <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card/80 backdrop-blur-sm z-10 gap-2">
+          <div className="flex items-center gap-2 min-w-0 shrink-0">
             <button onClick={() => navigate('/dashboard')} className="text-muted-foreground hover:text-foreground text-sm">
               ←
             </button>
-            <div className="flex items-center gap-2">
-              <div className="h-7 w-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-medium text-primary">
-                {(partnerName || 'P').charAt(0)}
-              </div>
-              <span className="text-sm font-body font-medium text-foreground">{partnerName || 'Partner'}</span>
+            <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
+              {(partnerName || 'P').charAt(0)}
             </div>
+            <span className="text-xs font-body font-medium text-foreground truncate">{partnerName || 'Partner'}</span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 shrink-0">
             {isVent && (
               <motion.button
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setShowResolution(true)}
-                className="text-xs rounded-pill px-3 py-1.5 bg-muted text-muted-foreground hover:bg-muted/80 font-body"
+                className="text-[10px] rounded-pill px-2 py-1 bg-muted text-muted-foreground hover:bg-muted/80 font-body whitespace-nowrap"
               >
                 Feeling better?
               </motion.button>
