@@ -168,7 +168,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   return (
     <AppContext.Provider value={{
       ...state, login, logout, setRole, generateCoupleId, linkPartner,
-      completeAssessment, setMode, addMessage, clearMessages, addGoal, toggleGoalComplete,
+      completeAssessment, setMode, addMessage, clearMessages, currentMessages, addGoal, toggleGoalComplete,
     }}>
       {children}
     </AppContext.Provider>
