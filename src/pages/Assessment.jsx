@@ -34,7 +34,7 @@ const Assessment = () => {
       }
     } catch (e) {
       console.error('Failed to fetch questions:', e);
-      setError(e.response?.data?.error || e.message || 'Failed to load questions.');
+      setError(friendlyError(e));
     } finally {
       setLoading(false);
     }
