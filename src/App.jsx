@@ -11,18 +11,27 @@ import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
 import Goals from "./pages/Goals";
 import NotFound from "./pages/NotFound";
+import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
 
 const AppRoutes = () => {
-  const { isAuthenticated, userRole, assessmentCompleted } = useApp();
+  const { isAuthenticated, userRole, assessmentCompleted, loading } = useApp();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
       <Routes>
         <Route path="*" element={<Login />} />
-      </Routes>);
-
+      </Routes>
+    );
   }
 
   if (!userRole) {
@@ -30,8 +39,8 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/role-selection" element={<RoleSelection />} />
         <Route path="*" element={<Navigate to="/role-selection" replace />} />
-      </Routes>);
-
+      </Routes>
+    );
   }
 
   if (!assessmentCompleted) {
@@ -39,8 +48,8 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/assessment" element={<Assessment />} />
         <Route path="*" element={<Navigate to="/assessment" replace />} />
-      </Routes>);
-
+      </Routes>
+    );
   }
 
   return (
@@ -50,12 +59,12 @@ const AppRoutes = () => {
       <Route path="/chat" element={<Chat />} />
       <Route path="/goals" element={<Goals />} />
       <Route path="*" element={<NotFound />} />
-    </Routes>);
-
+    </Routes>
+  );
 };
 
-const App = () =>
-<QueryClientProvider client={queryClient}>
+const App = () => (
+  <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
@@ -65,7 +74,7 @@ const App = () =>
         </BrowserRouter>
       </AppProvider>
     </TooltipProvider>
-  </QueryClientProvider>;
-
+  </QueryClientProvider>
+);
 
 export default App;
