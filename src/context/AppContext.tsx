@@ -18,6 +18,7 @@ export interface ChatMessage {
   text: string;
   sender: 'user' | 'partner' | 'ai';
   timestamp: Date;
+  mode: AppMode;
 }
 
 export interface AssessmentAnswers {
