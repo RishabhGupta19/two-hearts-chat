@@ -25,7 +25,7 @@ const AI_VENT_RESPONSES = [
 ];
 
 const Chat = () => {
-  const { mode, setMode, messages, addMessage, partnerName, userName, addGoal } = useApp();
+  const { mode, setMode, currentMessages, addMessage, partnerName, userName, addGoal } = useApp();
   const [input, setInput] = useState('');
   const [showGoalInput, setShowGoalInput] = useState(false);
   const [goalText, setGoalText] = useState('');
@@ -39,7 +39,7 @@ const Chat = () => {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [currentMessages]);
 
   const handleSend = () => {
     if (!input.trim()) return;
@@ -130,7 +130,7 @@ const Chat = () => {
 
         {/* Chat area */}
         <div className={`flex-1 overflow-y-auto p-4 ${isVent ? 'angry-breathing' : ''}`}>
-          {messages.length === 0 && (
+          {currentMessages.length === 0 && (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <span className="text-4xl block mb-3">{isVent ? '🫂' : '💬'}</span>
@@ -140,7 +140,7 @@ const Chat = () => {
               </div>
             </div>
           )}
-          {messages.map((msg, i) => (
+          {currentMessages.map((msg, i) => (
             <ChatBubble key={msg.id} message={msg} index={i} />
           ))}
           <div ref={chatEndRef} />
