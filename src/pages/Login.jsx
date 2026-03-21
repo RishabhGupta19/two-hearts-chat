@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
+import { friendlyError } from '@/utils/errorMessages';
 
 const Login = () => {
   const [isSignup, setIsSignup] = useState(false);
