@@ -25,13 +25,15 @@ const AI_VENT_RESPONSES = [
 ];
 
 const Chat = () => {
-  const { mode, messages, addMessage, partnerName, userName, addGoal } = useApp();
+  const { mode, setMode, messages, addMessage, partnerName, userName, addGoal } = useApp();
   const [input, setInput] = useState('');
   const [showGoalInput, setShowGoalInput] = useState(false);
   const [goalText, setGoalText] = useState('');
   const [selectedTag, setSelectedTag] = useState<GoalTag>('us');
   const [showResolution, setShowResolution] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
+  const [showModeConfirm, setShowModeConfirm] = useState(false);
+  const [pendingMode, setPendingMode] = useState<'calm' | 'vent' | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
