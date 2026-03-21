@@ -8,6 +8,8 @@ import { ResolutionModal } from '@/components/ResolutionModal';
 import { Input } from '@/components/ui/input';
 import { ModeWrapper } from '@/components/ModeWrapper';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { friendlyError } from '@/utils/errorMessages';
 
 const Chat = () => {
   const {
@@ -42,8 +44,8 @@ const Chat = () => {
     setSending(true);
     try {
       await sendMessage(text);
-    } catch {
-      // error handled in context
+    } catch (e) {
+      toast.error(friendlyError(e));
     } finally {
       setSending(false);
     }

@@ -6,6 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
 import api from '@/api';
+import { friendlyError } from '@/utils/errorMessages';
 
 const Assessment = () => {
   const [questions, setQuestions] = useState([]);
@@ -33,7 +34,7 @@ const Assessment = () => {
       }
     } catch (e) {
       console.error('Failed to fetch questions:', e);
-      setError(e.response?.data?.error || e.message || 'Failed to load questions.');
+      setError(friendlyError(e));
     } finally {
       setLoading(false);
     }
@@ -85,7 +86,7 @@ const Assessment = () => {
       }
     } catch (e) {
       console.error('Submit error:', e);
-      setError(e.response?.data?.error || e.message || 'Failed to submit.');
+      setError(friendlyError(e));
     } finally {
       setSubmitting(false);
     }
