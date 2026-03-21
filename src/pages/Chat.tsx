@@ -25,7 +25,7 @@ const AI_VENT_RESPONSES = [
 ];
 
 const Chat = () => {
-  const { mode, setMode, messages, addMessage, partnerName, userName, addGoal } = useApp();
+  const { mode, setMode, currentMessages, addMessage, partnerName, userName, addGoal } = useApp();
   const [input, setInput] = useState('');
   const [showGoalInput, setShowGoalInput] = useState(false);
   const [goalText, setGoalText] = useState('');
