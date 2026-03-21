@@ -10,7 +10,7 @@ const tagConfig = {
 
 export const GoalCard = ({ goal }) => {
   const { toggleGoalComplete } = useApp();
-  const tag = tagConfig[goal.tag];
+  const tag = tagConfig[goal.tag?.toLowerCase()] || { emoji: '🎯', label: goal.tag || 'Goal', color: 'bg-muted text-muted-foreground' };
 
   return (
     <motion.div
