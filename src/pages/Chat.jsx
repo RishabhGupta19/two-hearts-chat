@@ -44,8 +44,8 @@ const Chat = () => {
     setSending(true);
     try {
       await sendMessage(text);
-    } catch {
-      // error handled in context
+    } catch (e) {
+      toast.error(friendlyError(e));
     } finally {
       setSending(false);
     }

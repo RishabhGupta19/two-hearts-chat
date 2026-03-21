@@ -29,7 +29,7 @@ const Login = () => {
       }
       navigate('/role-selection');
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.detail || 'Something went wrong. Please try again.');
+      setError(friendlyError(err));
     } finally {
       setLoading(false);
     }
