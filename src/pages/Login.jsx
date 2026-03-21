@@ -27,7 +27,7 @@ const Login = () => {
       } else {
         await login(email, password);
       }
-      navigate('/role-selection');
+      navigate('/');
     } catch (err) {
       setError(friendlyError(err));
     } finally {
