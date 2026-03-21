@@ -5,8 +5,7 @@ import { useApp } from '@/context/AppContext';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
-
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/assessment-chat`;
+import api from '@/api';
 
 const Assessment = () => {
   const [questions, setQuestions] = useState([]);
@@ -15,7 +14,7 @@ const Assessment = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const { completeAssessment, userName } = useApp();
+  const { completeAssessment } = useApp();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -26,21 +25,7 @@ const Assessment = () => {
     setLoading(true);
     setError('');
     try {
-      const resp = await fetch(CHAT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ action: 'generate_questions', userName }),
-      });
-
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to load questions');
-      }
-
-      const data = await resp.json();
+      const { data } = await api.post('/assessment/generate-questions');
       if (data.questions && data.questions.length > 0) {
         setQuestions(data.questions);
       } else {
@@ -48,21 +33,19 @@ const Assessment = () => {
       }
     } catch (e) {
       console.error('Failed to fetch questions:', e);
-      setError(e.message || 'Failed to load questions. Please try again.');
+      setError(e.response?.data?.error || e.message || 'Failed to load questions.');
     } finally {
       setLoading(false);
     }
   };
 
   const toggleOption = (questionId, option) => {
-    setAnswers(prev => {
+    setAnswers((prev) => {
       const current = prev[questionId] || [];
       const exists = current.includes(option);
       return {
         ...prev,
-        [questionId]: exists
-          ? current.filter(o => o !== option)
-          : [...current, option],
+        [questionId]: exists ? current.filter((o) => o !== option) : [...current, option],
       };
     });
   };
@@ -77,45 +60,32 @@ const Assessment = () => {
     if (isLastQuestion) {
       submitAssessment();
     } else {
-      setCurrentIndex(i => i + 1);
+      setCurrentIndex((i) => i + 1);
     }
   };
 
   const handleBack = () => {
-    if (currentIndex > 0) setCurrentIndex(i => i - 1);
+    if (currentIndex > 0) setCurrentIndex((i) => i - 1);
   };
 
   const submitAssessment = async () => {
     setSubmitting(true);
+    setError('');
     try {
-      const formattedAnswers = questions.map(q => ({
+      const formattedAnswers = questions.map((q) => ({
         question: q.question,
         category: q.category,
         selected: answers[q.id] || [],
       }));
 
-      const resp = await fetch(CHAT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ action: 'summarize', answers: formattedAnswers }),
-      });
-
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to submit assessment');
-      }
-
-      const data = await resp.json();
-      if (data.profile) {
-        completeAssessment(data.profile);
+      const { data } = await api.post('/assessment/submit', { answers: formattedAnswers });
+      if (data.assessment_profile) {
+        completeAssessment(data.assessment_profile);
         navigate('/dashboard');
       }
     } catch (e) {
       console.error('Submit error:', e);
-      setError(e.message || 'Failed to submit. Please try again.');
+      setError(e.response?.data?.error || e.message || 'Failed to submit.');
     } finally {
       setSubmitting(false);
     }
@@ -143,7 +113,9 @@ const Assessment = () => {
     <div className="flex flex-col h-screen bg-background">
       <header className="px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm">
         <h1 className="font-heading text-lg font-semibold text-foreground text-center">Getting to Know You</h1>
-        <p className="text-[10px] text-muted-foreground font-body text-center">Select all that apply — this helps your AI companion respond thoughtfully.</p>
+        <p className="text-[10px] text-muted-foreground font-body text-center">
+          Select all that apply — this helps your AI companion respond thoughtfully.
+        </p>
         <div className="mt-2 flex items-center gap-3">
           <Progress value={progress} className="h-2 flex-1" />
           <span className="text-xs text-muted-foreground font-body whitespace-nowrap">
@@ -184,9 +156,11 @@ const Assessment = () => {
                           : 'border-border bg-card text-foreground hover:border-primary/40 hover:bg-card/80'
                       }`}
                     >
-                      <span className={`flex-shrink-0 h-5 w-5 rounded-md border-2 flex items-center justify-center transition-colors ${
-                        isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/30'
-                      }`}>
+                      <span
+                        className={`flex-shrink-0 h-5 w-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+                          isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/30'
+                        }`}
+                      >
                         {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-primary-foreground" />}
                       </span>
                       <span>{option}</span>
@@ -202,25 +176,20 @@ const Assessment = () => {
       <div className="border-t border-border bg-card px-4 py-3">
         {error && <p className="text-xs text-destructive mb-2 text-center">{error}</p>}
         <div className="flex gap-3 max-w-lg mx-auto">
-          <Button
-            variant="outline"
-            onClick={handleBack}
-            disabled={currentIndex === 0 || submitting}
-            className="rounded-xl"
-          >
+          <Button variant="outline" onClick={handleBack} disabled={currentIndex === 0 || submitting} className="rounded-xl">
             <ChevronLeft className="h-4 w-4 mr-1" /> Back
           </Button>
-          <Button
-            onClick={handleNext}
-            disabled={!canProceed || submitting}
-            className="flex-1 rounded-xl"
-          >
+          <Button onClick={handleNext} disabled={!canProceed || submitting} className="flex-1 rounded-xl">
             {submitting ? (
-              <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing...</>
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing...
+              </>
             ) : isLastQuestion ? (
               'Complete Assessment'
             ) : (
-              <>Next <ChevronRight className="h-4 w-4 ml-1" /></>
+              <>
+                Next <ChevronRight className="h-4 w-4 ml-1" />
+              </>
             )}
           </Button>
         </div>

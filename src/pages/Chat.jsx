@@ -7,26 +7,15 @@ import { ChatBubble } from '@/components/ChatBubble';
 import { ResolutionModal } from '@/components/ResolutionModal';
 import { Input } from '@/components/ui/input';
 import { ModeWrapper } from '@/components/ModeWrapper';
-
-const AI_CALM_RESPONSES = [
-"I hear you. That sounds like something important to talk about. 💛",
-"It's great that you're sharing this. Communication is the foundation of every strong relationship.",
-"That's a really thoughtful perspective. Have you shared this with your partner yet?",
-"I appreciate you opening up. Let's explore what's behind that feeling.",
-"That takes courage to say. You're both on the same team, remember that. 🌿"];
-
-
-const AI_VENT_RESPONSES = [
-"I hear you, and your feelings are completely valid. Take your time. 🫂",
-"It's okay to feel this way. There's no judgment here — just space for you.",
-"Sometimes we need to let it all out before we can think clearly. I'm here.",
-"Your frustration makes sense. You deserve to be heard.",
-"Let it out. This is your safe space. There's no rush to fix anything right now. 💜"];
-
+import { Loader2 } from 'lucide-react';
 
 const Chat = () => {
-  const { mode, setMode, currentMessages, addMessage, partnerName, userName, addGoal } = useApp();
+  const {
+    mode, setMode, currentMessages, sendMessage, fetchMessages,
+    partnerName, addGoal, resolveVent,
+  } = useApp();
   const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
   const [showGoalInput, setShowGoalInput] = useState(false);
   const [goalText, setGoalText] = useState('');
   const [selectedTag, setSelectedTag] = useState('us');
@@ -37,25 +26,32 @@ const Chat = () => {
   const chatEndRef = useRef(null);
   const navigate = useNavigate();
 
+  // Fetch messages when mode changes
+  useEffect(() => {
+    fetchMessages(mode);
+  }, [mode, fetchMessages]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentMessages]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    addMessage({ text: input, sender: 'user' });
+  const handleSend = async () => {
+    if (!input.trim() || sending) return;
+    const text = input;
     setInput('');
-
-    // Simulate AI response
-    setTimeout(() => {
-      const pool = mode === 'vent' ? AI_VENT_RESPONSES : AI_CALM_RESPONSES;
-      addMessage({ text: pool[Math.floor(Math.random() * pool.length)], sender: 'ai' });
-    }, 800);
+    setSending(true);
+    try {
+      await sendMessage(text);
+    } catch {
+      // error handled in context
+    } finally {
+      setSending(false);
+    }
   };
 
-  const handleGoalSubmit = () => {
+  const handleGoalSubmit = async () => {
     if (!goalText.trim()) return;
-    addGoal(goalText, selectedTag);
+    await addGoal(goalText, selectedTag);
     setGoalText('');
     setShowGoalInput(false);
   };
@@ -96,125 +92,129 @@ const Chat = () => {
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            {isVent &&
-            <motion.button
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setShowResolution(true)}
-              className="text-[10px] rounded-pill px-2 py-1 bg-muted text-muted-foreground hover:bg-muted/80 font-body whitespace-nowrap">
-              
+            {isVent && (
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setShowResolution(true)}
+                className="text-[10px] rounded-pill px-2 py-1 bg-muted text-muted-foreground hover:bg-muted/80 font-body whitespace-nowrap"
+              >
                 Feeling better?
               </motion.button>
-            }
+            )}
             <ModeToggle mode={mode} onModeChange={handleModeSwitch} />
           </div>
         </header>
 
         {/* Vent banner */}
         <AnimatePresence>
-          {isVent && showBanner &&
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between">
-            
+          {isVent && showBanner && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between"
+            >
               <span className="text-xs font-body text-foreground">
                 This is your safe space. Say what you feel. 🫂
               </span>
-              <button onClick={() => setShowBanner(false)} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
+              <button onClick={() => setShowBanner(false)} className="text-xs text-muted-foreground hover:text-foreground">
+                ✕
+              </button>
             </motion.div>
-          }
+          )}
         </AnimatePresence>
 
         {/* Chat area */}
         <div className={`flex-1 overflow-y-auto p-4 ${isVent ? 'angry-breathing' : ''}`}>
-          {currentMessages.length === 0 &&
-          <div className="flex items-center justify-center h-full">
+          {currentMessages.length === 0 && (
+            <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <span className="text-4xl block mb-3">{isVent ? '🫂' : '💬'}</span>
                 <p className="text-sm text-muted-foreground font-body">
-                  {isVent ? "Let it out. We're listening." : `Start a conversation with your AI companion`}
+                  {isVent ? "Let it out. We're listening." : 'Start a conversation with your AI companion'}
                 </p>
               </div>
             </div>
-          }
-          {currentMessages.map((msg, i) =>
-          <ChatBubble key={msg.id} message={msg} index={i} />
           )}
+          {currentMessages.map((msg, i) => (
+            <ChatBubble key={msg.id} message={msg} index={i} />
+          ))}
           <div ref={chatEndRef} />
         </div>
 
         {/* Goal input (calm mode only) */}
         <AnimatePresence>
-          {!isVent && showGoalInput &&
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="border-t border-border bg-card px-4 py-3">
-            
+          {!isVent && showGoalInput && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="border-t border-border bg-card px-4 py-3"
+            >
               <p className="text-xs font-medium text-foreground font-body mb-2">
                 Set a goal for {partnerName || 'Partner'} to see
               </p>
               <div className="flex gap-2 mb-2">
-                {[['growth', '💪'], ['us', '❤️'], ['personal', '🌱']].map(([tag, emoji]) =>
-              <button
-                key={tag}
-                onClick={() => setSelectedTag(tag)}
-                className={`rounded-pill px-3 py-1 text-xs font-body border transition-colors ${
-                selectedTag === tag ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground'}`
-                }>
-                
+                {[['growth', '💪'], ['us', '❤️'], ['personal', '🌱']].map(([tag, emoji]) => (
+                  <button
+                    key={tag}
+                    onClick={() => setSelectedTag(tag)}
+                    className={`rounded-pill px-3 py-1 text-xs font-body border transition-colors ${
+                      selectedTag === tag ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground'
+                    }`}
+                  >
                     {emoji} {tag.charAt(0).toUpperCase() + tag.slice(1)}
                   </button>
-              )}
+                ))}
               </div>
               <div className="flex gap-2">
                 <Input
-                value={goalText}
-                onChange={(e) => setGoalText(e.target.value)}
-                placeholder="What's a goal you'd like to share?"
-                className="rounded-[12px] text-sm flex-1"
-                onKeyDown={(e) => e.key === 'Enter' && handleGoalSubmit()} />
-              
+                  value={goalText}
+                  onChange={(e) => setGoalText(e.target.value)}
+                  placeholder="What's a goal you'd like to share?"
+                  className="rounded-[12px] text-sm flex-1"
+                  onKeyDown={(e) => e.key === 'Enter' && handleGoalSubmit()}
+                />
                 <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={handleGoalSubmit}
-                className="rounded-pill bg-primary px-4 text-sm text-primary-foreground font-medium">
-                
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleGoalSubmit}
+                  className="rounded-pill bg-primary px-4 text-sm text-primary-foreground font-medium"
+                >
                   Share
                 </motion.button>
               </div>
             </motion.div>
-          }
+          )}
         </AnimatePresence>
 
         {/* Input bar */}
         <div className="border-t border-border bg-card px-4 py-3">
-          {!isVent &&
-          <button
-            onClick={() => setShowGoalInput(!showGoalInput)}
-            className="text-xs text-primary font-medium font-body mb-2 hover:underline">
-            
+          {!isVent && (
+            <button
+              onClick={() => setShowGoalInput(!showGoalInput)}
+              className="text-xs text-primary font-medium font-body mb-2 hover:underline"
+            >
               {showGoalInput ? '− Hide goal setter' : '+ Set a Goal for Today'}
             </button>
-          }
+          )}
           <div className="flex gap-2">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               placeholder={isVent ? "What's on your mind? Let it out..." : `Message ${partnerName || 'your companion'}...`}
-              className="rounded-[12px] text-sm flex-1" />
-            
+              className="rounded-[12px] text-sm flex-1"
+              disabled={sending}
+            />
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleSend}
-              className="rounded-pill bg-primary px-5 text-sm text-primary-foreground font-medium shadow-soft hover:bg-primary/90 transition-colors">
-              
-              Send
+              disabled={sending}
+              className="rounded-pill bg-primary px-5 text-sm text-primary-foreground font-medium shadow-soft hover:bg-primary/90 transition-colors flex items-center gap-1.5"
+            >
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
             </motion.button>
           </div>
         </div>
@@ -223,21 +223,21 @@ const Chat = () => {
 
         {/* Mode switch confirmation */}
         <AnimatePresence>
-          {showModeConfirm &&
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm p-4"
-            onClick={() => setShowModeConfirm(false)}>
-            
+          {showModeConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm p-4"
+              onClick={() => setShowModeConfirm(false)}
+            >
               <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-xs rounded-lg bg-card p-6 shadow-warm text-center"
-              onClick={(e) => e.stopPropagation()}>
-              
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="w-full max-w-xs rounded-lg bg-card p-6 shadow-warm text-center"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <h3 className="font-heading text-lg font-semibold text-foreground mb-2">
                   Switch to {pendingMode === 'vent' ? '😤 Vent' : '😊 Calm'} mode?
                 </h3>
@@ -246,27 +246,27 @@ const Chat = () => {
                 </p>
                 <div className="flex gap-2">
                   <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => setShowModeConfirm(false)}
-                  className="flex-1 rounded-pill bg-muted py-2.5 text-xs font-medium text-muted-foreground">
-                  
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setShowModeConfirm(false)}
+                    className="flex-1 rounded-pill bg-muted py-2.5 text-xs font-medium text-muted-foreground"
+                  >
                     Cancel
                   </motion.button>
                   <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={confirmModeSwitch}
-                  className="flex-1 rounded-pill bg-primary py-2.5 text-xs font-medium text-primary-foreground">
-                  
+                    whileTap={{ scale: 0.97 }}
+                    onClick={confirmModeSwitch}
+                    className="flex-1 rounded-pill bg-primary py-2.5 text-xs font-medium text-primary-foreground"
+                  >
                     Switch
                   </motion.button>
                 </div>
               </motion.div>
             </motion.div>
-          }
+          )}
         </AnimatePresence>
       </div>
-    </ModeWrapper>);
-
+    </ModeWrapper>
+  );
 };
 
 export default Chat;
