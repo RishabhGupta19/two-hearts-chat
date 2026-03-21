@@ -1,35 +1,30 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
-import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
+import { CheckCircle2, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/assessment-chat`;
 
 const Assessment = () => {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [started, setStarted] = useState(false);
+  const [questions, setQuestions] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const { completeAssessment, userName } = useApp();
   const navigate = useNavigate();
-  const chatEndRef = useRef(null);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  useEffect(() => {
-    if (!started) {
-      setStarted(true);
-      streamFromAI([{ role: 'user', content: `Hi, my name is ${userName}. I'm ready for the assessment.` }]);
-    }
+    fetchQuestions();
   }, []);
 
-  const streamFromAI = async (allMessages) => {
-    setIsLoading(true);
-    let assistantText = '';
-
+  const fetchQuestions = async () => {
+    setLoading(true);
+    setError('');
     try {
       const resp = await fetch(CHAT_URL, {
         method: 'POST',
@@ -37,153 +32,197 @@ const Assessment = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: allMessages }),
+        body: JSON.stringify({ action: 'generate_questions', userName }),
       });
 
-      if (!resp.ok || !resp.body) {
-        throw new Error('Failed to connect to AI');
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to load questions');
       }
 
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        let newlineIndex;
-        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-          let line = buffer.slice(0, newlineIndex);
-          buffer = buffer.slice(newlineIndex + 1);
-
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (line.startsWith(':') || line.trim() === '') continue;
-          if (!line.startsWith('data: ')) continue;
-
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              assistantText += content;
-              setMessages(prev => {
-                const last = prev[prev.length - 1];
-                if (last?.role === 'assistant') {
-                  return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantText } : m);
-                }
-                return [...prev, { role: 'assistant', content: assistantText }];
-              });
-            }
-          } catch {
-            buffer = line + '\n' + buffer;
-            break;
-          }
-        }
-      }
-
-      // Check if assessment is complete
-      const match = assistantText.match(/<assessment_complete>([\s\S]*?)<\/assessment_complete>/);
-      if (match) {
-        try {
-          const answers = JSON.parse(match[1]);
-          const cleanText = assistantText.replace(/<assessment_complete>[\s\S]*?<\/assessment_complete>/, '').trim();
-          setMessages(prev => {
-            const updated = [...prev];
-            updated[updated.length - 1] = { role: 'assistant', content: cleanText };
-            return updated;
-          });
-          setTimeout(() => {
-            completeAssessment(answers);
-            navigate('/dashboard');
-          }, 3000);
-        } catch (e) {
-          console.error('Failed to parse assessment:', e);
-        }
+      const data = await resp.json();
+      if (data.questions && data.questions.length > 0) {
+        setQuestions(data.questions);
+      } else {
+        throw new Error('No questions received');
       }
     } catch (e) {
-      console.error('Stream error:', e);
-      setMessages(prev => [...prev, { role: 'assistant', content: "I'm having trouble connecting. Please try again." }]);
+      console.error('Failed to fetch questions:', e);
+      setError(e.message || 'Failed to load questions. Please try again.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleSend = () => {
-    if (!input.trim() || isLoading) return;
-    const userMsg = { role: 'user', content: input };
-    const allMessages = [...messages, userMsg];
-    setMessages(allMessages);
-    setInput('');
-    streamFromAI(allMessages);
+  const toggleOption = (questionId, option) => {
+    setAnswers(prev => {
+      const current = prev[questionId] || [];
+      const exists = current.includes(option);
+      return {
+        ...prev,
+        [questionId]: exists
+          ? current.filter(o => o !== option)
+          : [...current, option],
+      };
+    });
   };
+
+  const currentQuestion = questions[currentIndex];
+  const currentAnswers = answers[currentQuestion?.id] || [];
+  const progress = questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0;
+  const isLastQuestion = currentIndex === questions.length - 1;
+  const canProceed = currentAnswers.length > 0;
+
+  const handleNext = () => {
+    if (isLastQuestion) {
+      submitAssessment();
+    } else {
+      setCurrentIndex(i => i + 1);
+    }
+  };
+
+  const handleBack = () => {
+    if (currentIndex > 0) setCurrentIndex(i => i - 1);
+  };
+
+  const submitAssessment = async () => {
+    setSubmitting(true);
+    try {
+      const formattedAnswers = questions.map(q => ({
+        question: q.question,
+        category: q.category,
+        selected: answers[q.id] || [],
+      }));
+
+      const resp = await fetch(CHAT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ action: 'summarize', answers: formattedAnswers }),
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to submit assessment');
+      }
+
+      const data = await resp.json();
+      if (data.profile) {
+        completeAssessment(data.profile);
+        navigate('/dashboard');
+      }
+    } catch (e) {
+      console.error('Submit error:', e);
+      setError(e.message || 'Failed to submit. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-background gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground font-body text-sm">Preparing your personalized assessment...</p>
+      </div>
+    );
+  }
+
+  if (error && questions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-background gap-4 px-6">
+        <p className="text-destructive font-body text-sm text-center">{error}</p>
+        <Button onClick={fetchQuestions} variant="outline">Try Again</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      <header className="px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm text-center">
-        <h1 className="font-heading text-lg font-semibold text-foreground">Getting to Know You</h1>
-        <p className="text-[10px] text-muted-foreground font-body">This stays private and helps your AI companion respond thoughtfully.</p>
+      <header className="px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm">
+        <h1 className="font-heading text-lg font-semibold text-foreground text-center">Getting to Know You</h1>
+        <p className="text-[10px] text-muted-foreground font-body text-center">Select all that apply — this helps your AI companion respond thoughtfully.</p>
+        <div className="mt-2 flex items-center gap-3">
+          <Progress value={progress} className="h-2 flex-1" />
+          <span className="text-xs text-muted-foreground font-body whitespace-nowrap">
+            {currentIndex + 1} / {questions.length}
+          </span>
+        </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.map((msg, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm font-body leading-relaxed ${
-                msg.role === 'user'
-                  ? 'bg-primary text-primary-foreground rounded-br-sm'
-                  : 'bg-card text-card-foreground border border-border rounded-bl-sm shadow-soft'
-              }`}
+      <div className="flex-1 overflow-y-auto px-4 py-6">
+        <AnimatePresence mode="wait">
+          {currentQuestion && (
+            <motion.div
+              key={currentQuestion.id}
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -30 }}
+              transition={{ duration: 0.25 }}
+              className="max-w-lg mx-auto"
             >
-              {msg.role === 'assistant' && (
-                <span className="text-xs font-medium text-muted-foreground block mb-1">AI Companion</span>
-              )}
-              <p className="whitespace-pre-wrap">{msg.content}</p>
-            </div>
-          </motion.div>
-        ))}
+              <span className="text-xs font-medium text-primary/70 font-body uppercase tracking-wider">
+                {currentQuestion.category?.replace(/([A-Z])/g, ' $1').trim()}
+              </span>
+              <h2 className="font-heading text-xl font-semibold text-foreground mt-1 mb-5 leading-snug">
+                {currentQuestion.question}
+              </h2>
 
-        {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-            <div className="bg-card border border-border rounded-2xl rounded-bl-sm px-4 py-3 shadow-soft">
-              <div className="flex gap-1">
-                <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div className="space-y-2.5">
+                {currentQuestion.options?.map((option, idx) => {
+                  const isSelected = currentAnswers.includes(option);
+                  return (
+                    <motion.button
+                      key={idx}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => toggleOption(currentQuestion.id, option)}
+                      className={`w-full text-left px-4 py-3.5 rounded-xl border-2 transition-all duration-150 font-body text-sm flex items-center gap-3 ${
+                        isSelected
+                          ? 'border-primary bg-primary/10 text-foreground shadow-sm'
+                          : 'border-border bg-card text-foreground hover:border-primary/40 hover:bg-card/80'
+                      }`}
+                    >
+                      <span className={`flex-shrink-0 h-5 w-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+                        isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/30'
+                      }`}>
+                        {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-primary-foreground" />}
+                      </span>
+                      <span>{option}</span>
+                    </motion.button>
+                  );
+                })}
               </div>
-            </div>
-          </motion.div>
-        )}
-        <div ref={chatEndRef} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="border-t border-border bg-card px-4 py-3">
-        <div className="flex gap-2">
-          <Input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSend()}
-            placeholder="Type your answer..."
-            className="rounded-[12px] text-sm flex-1"
-            disabled={isLoading}
-          />
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={handleSend}
-            disabled={isLoading}
-            className="rounded-pill bg-primary px-5 text-sm text-primary-foreground font-medium shadow-soft hover:bg-primary/90 transition-colors disabled:opacity-50"
+        {error && <p className="text-xs text-destructive mb-2 text-center">{error}</p>}
+        <div className="flex gap-3 max-w-lg mx-auto">
+          <Button
+            variant="outline"
+            onClick={handleBack}
+            disabled={currentIndex === 0 || submitting}
+            className="rounded-xl"
           >
-            Send
-          </motion.button>
+            <ChevronLeft className="h-4 w-4 mr-1" /> Back
+          </Button>
+          <Button
+            onClick={handleNext}
+            disabled={!canProceed || submitting}
+            className="flex-1 rounded-xl"
+          >
+            {submitting ? (
+              <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing...</>
+            ) : isLastQuestion ? (
+              'Complete Assessment'
+            ) : (
+              <>Next <ChevronRight className="h-4 w-4 ml-1" /></>
+            )}
+          </Button>
         </div>
       </div>
     </div>

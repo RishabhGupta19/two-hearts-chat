@@ -5,24 +5,31 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `You are a warm, empathetic relationship counselor conducting a brief assessment for a couple's communication app called UsTwo. 
+const SYSTEM_PROMPT = `You are a relationship counselor designing a personalized assessment for a couple's communication app called UsTwo.
 
-Your job is to ask ONE question at a time to understand the user's communication style, conflict resolution preferences, love language, and emotional needs. 
+Generate exactly 10 multiple-choice questions to understand the user's communication style, conflict resolution preferences, love language, and emotional needs.
 
 Rules:
-- Ask exactly ONE question per response
-- Keep questions warm, non-judgmental, and conversational
-- After the user answers, acknowledge their answer briefly and ask the next question
-- After asking 6 questions total, respond with a JSON summary wrapped in <assessment_complete> tags
-- The JSON should have keys: upsetPreference, loveLanguage, conflictStyle, communicationStrength, appreciationStyle, stressResponse
-- Each value should be a short phrase summarizing their answer
+- Return ONLY valid JSON, no other text
+- Each question must have 4-6 options
+- All questions allow multiple selections
+- Questions should cover: conflict style, love language, communication preferences, emotional needs, stress responses, appreciation style, boundaries, trust building, quality time preferences, and growth mindset
+- Make questions warm, relatable, and non-judgmental
+- Options should be concise (under 10 words each)
 
-Example final response:
-"Thank you for sharing all of this with me! 🧡 I feel like I understand you much better now.
+Return this exact JSON structure:
+{
+  "questions": [
+    {
+      "id": 1,
+      "question": "The question text",
+      "category": "category_name",
+      "options": ["Option A", "Option B", "Option C", "Option D"]
+    }
+  ]
+}
 
-<assessment_complete>{"upsetPreference":"Needs space first","loveLanguage":"Words of Affirmation","conflictStyle":"Needs time to process","communicationStrength":"Good listener","appreciationStyle":"Verbal praise","stressResponse":"Seeks alone time"}</assessment_complete>"
-
-Start by warmly greeting the user and asking your first question about how they handle being upset.`;
+Categories to use: upsetPreference, loveLanguage, conflictStyle, communicationStrength, appreciationStyle, stressResponse, boundaries, trustBuilding, qualityTime, growthMindset`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -30,55 +37,122 @@ serve(async (req) => {
   }
 
   try {
-    const { messages } = await req.json();
+    const { action, answers, userName } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          ...messages,
-        ],
-        stream: true,
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited, please try again shortly." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Credits exhausted. Please add funds." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      return new Response(JSON.stringify({ error: "AI service error" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (action === "generate_questions") {
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: `Generate the assessment questions for a user named ${userName || "there"}.` },
+          ],
+        }),
       });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          return new Response(JSON.stringify({ error: "Rate limited, please try again shortly." }), {
+            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (response.status === 402) {
+          return new Response(JSON.stringify({ error: "Credits exhausted. Please add funds." }), {
+            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const t = await response.text();
+        console.error("AI gateway error:", response.status, t);
+        return new Response(JSON.stringify({ error: "AI service error" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || "";
+      
+      // Extract JSON from the response (handle markdown code blocks)
+      let jsonStr = content;
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) jsonStr = jsonMatch[1].trim();
+      
+      try {
+        const questions = JSON.parse(jsonStr);
+        return new Response(JSON.stringify(questions), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch {
+        console.error("Failed to parse questions JSON:", jsonStr);
+        return new Response(JSON.stringify({ error: "Failed to generate questions" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
-    return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    if (action === "summarize") {
+      const summaryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            {
+              role: "system",
+              content: `You are a relationship counselor. Given a user's assessment answers, create a concise profile summary. Return ONLY valid JSON with these keys: upsetPreference, loveLanguage, conflictStyle, communicationStrength, appreciationStyle, stressResponse, boundaries, trustBuilding, qualityTime, growthMindset. Each value should be a short phrase (under 8 words) summarizing their tendency.`,
+            },
+            {
+              role: "user",
+              content: `Here are the user's assessment answers:\n${JSON.stringify(answers, null, 2)}`,
+            },
+          ],
+        }),
+      });
+
+      if (!summaryResponse.ok) {
+        const t = await summaryResponse.text();
+        console.error("Summary error:", summaryResponse.status, t);
+        return new Response(JSON.stringify({ error: "Failed to summarize" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const summaryData = await summaryResponse.json();
+      const summaryContent = summaryData.choices?.[0]?.message?.content || "";
+      
+      let summaryJson = summaryContent;
+      const summaryMatch = summaryContent.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (summaryMatch) summaryJson = summaryMatch[1].trim();
+
+      try {
+        const profile = JSON.parse(summaryJson);
+        return new Response(JSON.stringify({ profile }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch {
+        console.error("Failed to parse summary JSON:", summaryJson);
+        return new Response(JSON.stringify({ error: "Failed to create profile" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    return new Response(JSON.stringify({ error: "Invalid action" }), {
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("assessment-chat error:", e);
     return new Response(JSON.stringify({ error: e.message || "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
