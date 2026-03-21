@@ -1,70 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 const AppContext = createContext(null);
 
@@ -74,60 +8,91 @@ export const useApp = () => {
   return ctx;
 };
 
+// Helper to load persisted state
+const loadPersistedState = () => {
+  try {
+    const saved = localStorage.getItem('ustwo_state');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Restore dates in messages
+      if (parsed.messages) {
+        parsed.messages = parsed.messages.map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
+      }
+      return parsed;
+    }
+  } catch (e) { /* ignore */ }
+  return null;
+};
+
+const defaultState = {
+  isAuthenticated: false,
+  userName: '',
+  userEmail: '',
+  userRole: null,
+  coupleId: null,
+  partnerName: '',
+  isLinked: false,
+  assessmentCompleted: false,
+  assessmentAnswers: {},
+  mode: 'calm',
+  messages: [],
+  goals: [],
+};
+
 export const AppProvider = ({ children }) => {
-  const [state, setState] = useState({
-    isAuthenticated: false,
-    userName: '',
-    userEmail: '',
-    userRole: null,
-    coupleId: null,
-    partnerName: '',
-    isLinked: false,
-    assessmentCompleted: false,
-    assessmentAnswers: {},
-    mode: 'calm',
-    messages: [],
-    goals: []
-  });
+  const [state, setState] = useState(() => loadPersistedState() || defaultState);
+
+  // Persist key state to localStorage
+  useEffect(() => {
+    const toPersist = {
+      isAuthenticated: state.isAuthenticated,
+      userName: state.userName,
+      userEmail: state.userEmail,
+      userRole: state.userRole,
+      coupleId: state.coupleId,
+      partnerName: state.partnerName,
+      isLinked: state.isLinked,
+      assessmentCompleted: state.assessmentCompleted,
+      assessmentAnswers: state.assessmentAnswers,
+      goals: state.goals,
+      // Don't persist messages or mode — those are session-only
+    };
+    localStorage.setItem('ustwo_state', JSON.stringify(toPersist));
+  }, [state.isAuthenticated, state.userName, state.userRole, state.coupleId, state.partnerName, state.isLinked, state.assessmentCompleted, state.assessmentAnswers, state.goals]);
 
   const login = useCallback((name, email) => {
-    setState((s) => ({ ...s, isAuthenticated: true, userName: name, userEmail: email }));
+    setState(s => ({ ...s, isAuthenticated: true, userName: name, userEmail: email }));
   }, []);
 
   const logout = useCallback(() => {
-    setState({
-      isAuthenticated: false, userName: '', userEmail: '',
-      userRole: null, coupleId: null, partnerName: '', isLinked: false,
-      assessmentCompleted: false, assessmentAnswers: {},
-      mode: 'calm', messages: [], goals: []
-    });
+    localStorage.removeItem('ustwo_state');
+    setState({ ...defaultState });
   }, []);
 
   const setRole = useCallback((role) => {
-    setState((s) => ({ ...s, userRole: role }));
+    setState(s => ({ ...s, userRole: role }));
   }, []);
 
   const generateCoupleId = useCallback(() => {
     const id = '#' + Math.random().toString(36).substring(2, 8).toUpperCase();
-    setState((s) => ({ ...s, coupleId: id }));
+    setState(s => ({ ...s, coupleId: id }));
     return id;
   }, []);
 
   const linkPartner = useCallback((code, partnerName) => {
-    // In a real app, this would verify the code against a backend
     if (code.length >= 7) {
-      setState((s) => ({ ...s, coupleId: code, partnerName, isLinked: true }));
+      setState(s => ({ ...s, coupleId: code, partnerName, isLinked: true }));
       return true;
     }
     return false;
   }, []);
 
   const completeAssessment = useCallback((answers) => {
-    setState((s) => ({ ...s, assessmentCompleted: true, assessmentAnswers: answers }));
+    setState(s => ({ ...s, assessmentCompleted: true, assessmentAnswers: answers }));
   }, []);
 
   const setMode = useCallback((mode) => {
-    setState((s) => ({ ...s, mode }));
+    setState(s => ({ ...s, mode }));
   }, []);
 
   const addMessage = useCallback((msg) => {
@@ -135,16 +100,16 @@ export const AppProvider = ({ children }) => {
       ...msg,
       id: Date.now().toString(),
       timestamp: new Date(),
-      mode: state.mode
+      mode: state.mode,
     };
-    setState((s) => ({ ...s, messages: [...s.messages, newMsg] }));
+    setState(s => ({ ...s, messages: [...s.messages, newMsg] }));
   }, [state.mode]);
 
   const clearMessages = useCallback(() => {
-    setState((s) => ({ ...s, messages: s.messages.filter((m) => m.mode !== s.mode), mode: 'calm' }));
+    setState(s => ({ ...s, messages: s.messages.filter(m => m.mode !== s.mode), mode: 'calm' }));
   }, []);
 
-  const currentMessages = state.messages.filter((m) => m.mode === state.mode);
+  const currentMessages = state.messages.filter(m => m.mode === state.mode);
 
   const addGoal = useCallback((text, tag) => {
     const goal = {
@@ -153,24 +118,24 @@ export const AppProvider = ({ children }) => {
       tag,
       setBy: state.userRole,
       date: new Date().toLocaleDateString(),
-      completed: false
+      completed: false,
     };
-    setState((s) => ({ ...s, goals: [...s.goals, goal] }));
+    setState(s => ({ ...s, goals: [...s.goals, goal] }));
   }, [state.userRole]);
 
   const toggleGoalComplete = useCallback((id) => {
-    setState((s) => ({
+    setState(s => ({
       ...s,
-      goals: s.goals.map((g) => g.id === id ? { ...g, completed: !g.completed } : g)
+      goals: s.goals.map(g => g.id === id ? { ...g, completed: !g.completed } : g),
     }));
   }, []);
 
   return (
     <AppContext.Provider value={{
       ...state, login, logout, setRole, generateCoupleId, linkPartner,
-      completeAssessment, setMode, addMessage, clearMessages, currentMessages, addGoal, toggleGoalComplete
+      completeAssessment, setMode, addMessage, clearMessages, currentMessages, addGoal, toggleGoalComplete,
     }}>
       {children}
-    </AppContext.Provider>);
-
+    </AppContext.Provider>
+  );
 };
