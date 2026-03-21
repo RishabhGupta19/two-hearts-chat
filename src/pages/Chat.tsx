@@ -220,6 +220,50 @@ const Chat = () => {
         </div>
 
         <ResolutionModal open={showResolution} onClose={() => setShowResolution(false)} />
+
+        {/* Mode switch confirmation */}
+        <AnimatePresence>
+          {showModeConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm p-4"
+              onClick={() => setShowModeConfirm(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="w-full max-w-xs rounded-lg bg-card p-6 shadow-warm text-center"
+                onClick={e => e.stopPropagation()}
+              >
+                <h3 className="font-heading text-lg font-semibold text-foreground mb-2">
+                  Switch to {pendingMode === 'vent' ? '😤 Vent' : '😊 Calm'} mode?
+                </h3>
+                <p className="text-xs text-muted-foreground font-body mb-6">
+                  Your input will be cleared. Your chat history stays.
+                </p>
+                <div className="flex gap-2">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setShowModeConfirm(false)}
+                    className="flex-1 rounded-pill bg-muted py-2.5 text-xs font-medium text-muted-foreground"
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={confirmModeSwitch}
+                    className="flex-1 rounded-pill bg-primary py-2.5 text-xs font-medium text-primary-foreground"
+                  >
+                    Switch
+                  </motion.button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </ModeWrapper>
   );
