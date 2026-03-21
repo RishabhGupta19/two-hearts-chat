@@ -1,15 +1,18 @@
 import { motion } from 'framer-motion';
-import { useApp, AppMode } from '@/context/AppContext';
+import { AppMode } from '@/context/AppContext';
 
-export const ModeToggle = () => {
-  const { mode, setMode } = useApp();
+interface ModeToggleProps {
+  mode: AppMode;
+  onModeChange: (mode: AppMode) => void;
+}
 
+export const ModeToggle = ({ mode, onModeChange }: ModeToggleProps) => {
   return (
     <div className="flex items-center gap-0.5 rounded-pill bg-muted p-0.5">
       {(['calm', 'vent'] as AppMode[]).map((m) => (
         <motion.button
           key={m}
-          onClick={() => setMode(m)}
+          onClick={() => onModeChange(m)}
           className={`relative rounded-pill px-2.5 py-1 text-xs font-medium font-body transition-colors ${
             mode === m ? '' : 'text-muted-foreground hover:text-foreground'
           }`}
