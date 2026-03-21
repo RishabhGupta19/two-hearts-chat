@@ -60,6 +60,24 @@ const Chat = () => {
     setShowGoalInput(false);
   };
 
+  const handleModeSwitch = (newMode: 'calm' | 'vent') => {
+    if (newMode === mode) return;
+    setPendingMode(newMode);
+    setShowModeConfirm(true);
+  };
+
+  const confirmModeSwitch = () => {
+    if (pendingMode) {
+      setMode(pendingMode);
+      setInput('');
+      setGoalText('');
+      setShowGoalInput(false);
+      if (pendingMode === 'vent') setShowBanner(true);
+    }
+    setShowModeConfirm(false);
+    setPendingMode(null);
+  };
+
   const isVent = mode === 'vent';
 
   return (
