@@ -107,7 +107,7 @@ const Chat = () => {
                 Feeling better?
               </motion.button>
             )}
-            <ModeToggle />
+            <ModeToggle mode={mode} onModeChange={handleModeSwitch} />
           </div>
         </header>
 
