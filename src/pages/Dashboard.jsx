@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 
 const Dashboard = () => {
-  const { userName, partnerName, isLinked, logout } = useApp();
+  const state = useApp();
+  const { userName, partnerName, isLinked, logout } = state;
   const navigate = useNavigate();
 
   return (
