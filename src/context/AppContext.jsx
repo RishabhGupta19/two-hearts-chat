@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import api from '@/api';
+import { requestNotificationPermission } from '@/firebase';
 
 const AppContext = createContext(null);
 
@@ -127,6 +128,7 @@ export const AppProvider = ({ children }) => {
     localStorage.setItem('access_token', data.access);
     localStorage.setItem('refresh_token', data.refresh);
     syncUserState(data.user);
+    requestNotificationPermission(api);
   }, []);
 
   const login = useCallback(async (email, password) => {
@@ -134,6 +136,7 @@ export const AppProvider = ({ children }) => {
     localStorage.setItem('access_token', data.access);
     localStorage.setItem('refresh_token', data.refresh);
     syncUserState(data.user);
+    requestNotificationPermission(api);
   }, []);
 
   const logout = useCallback(() => {

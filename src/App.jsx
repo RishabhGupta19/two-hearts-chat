@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
-import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster as Sonner, toast } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider, useApp } from "@/context/AppContext";
+import { onMessageListener } from "@/firebase";
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
 import Assessment from "./pages/Assessment";
@@ -17,8 +19,25 @@ import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
 
+const useFirebaseForegroundMessages = () => {
+  useEffect(() => {
+    const listen = () => {
+      onMessageListener()
+        .then((payload) => {
+          toast(payload?.notification?.title || "New message", {
+            description: payload?.notification?.body || "",
+          });
+          listen(); // re-subscribe for next message
+        })
+        .catch((err) => console.error("FCM foreground error:", err));
+    };
+    listen();
+  }, []);
+};
+
 const AppRoutes = () => {
   const { isAuthenticated, userRole, assessmentCompleted, nickname, isLinked, loading } = useApp();
+  useFirebaseForegroundMessages();
 
   if (loading) {
     return (
