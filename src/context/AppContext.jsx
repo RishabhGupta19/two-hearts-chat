@@ -34,6 +34,19 @@ const normalizeChatMessage = (message, currentUserRole, mode) => {
     };
   }
 
+  // Vent mode: ensure sender is normalised to 'user' or 'ai'
+  if (message.sender === 'user' || message.sender === 'ai') return message;
+  // Fallback: if sender_role matches current user, it's theirs; otherwise AI
+  if (message.sender_role) {
+    return { ...message, sender: message.sender_role === currentUserRole ? 'user' : 'ai' };
+  }
+  // If role field is present
+  if (message.role === 'assistant' || message.role === 'ai') {
+    return { ...message, sender: 'ai' };
+  }
+  if (message.role === 'user') {
+    return { ...message, sender: 'user' };
+  }
   return message;
 };
 
