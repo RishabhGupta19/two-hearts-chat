@@ -21,7 +21,7 @@ const defaultState = {
   isLinked: false,
   assessmentCompleted: false,
   assessmentProfile: null,
-  mode: 'calm',
+  mode: localStorage.getItem('chat_mode') || 'calm',
   messages: [],
   goals: [],
   loading: true,
@@ -154,6 +154,7 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const setMode = useCallback((mode) => {
+    localStorage.setItem('chat_mode', mode);
     setState((s) => ({ ...s, mode }));
   }, []);
 
