@@ -4,13 +4,14 @@ import { useApp } from '@/context/AppContext';
 export const ChatBubble = ({ message, index }) => {
   const { user } = useApp();
 
-  const hasExplicitOwnership = typeof message.isMine === 'boolean';
-  const isMine = hasExplicitOwnership
-    ? message.isMine
-    : user?.id && message.sender_id
-      ? String(message.sender_id) === String(user.id)
-      : message.sender === 'user';
   const isAI = message.sender === 'ai';
+  const isMine = isAI
+    ? false
+    : typeof message.isMine === 'boolean'
+      ? message.isMine
+      : user?.id && message.sender_id
+        ? String(message.sender_id) === String(user.id)
+        : message.sender === 'user';
 
   return (
     <motion.div
