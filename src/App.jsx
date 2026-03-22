@@ -7,6 +7,7 @@ import { AppProvider, useApp } from "@/context/AppContext";
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
 import Assessment from "./pages/Assessment";
+import PartnerLinking from "./pages/PartnerLinking";
 import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
 import Goals from "./pages/Goals";
@@ -16,7 +17,7 @@ import { Loader2 } from "lucide-react";
 const queryClient = new QueryClient();
 
 const AppRoutes = () => {
-  const { isAuthenticated, userRole, assessmentCompleted, loading } = useApp();
+  const { isAuthenticated, userRole, assessmentCompleted, isLinked, loading } = useApp();
 
   if (loading) {
     return (
@@ -55,6 +56,7 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/partner-linking" element={<PartnerLinking />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/chat" element={<Chat />} />
       <Route path="/goals" element={<Goals />} />

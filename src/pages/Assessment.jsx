@@ -82,7 +82,7 @@ const Assessment = () => {
       const { data } = await api.post('/assessment/submit', { answers: formattedAnswers });
       if (data.assessment_profile) {
         completeAssessment(data.assessment_profile);
-        navigate('/dashboard');
+        navigate('/partner-linking');
       }
     } catch (e) {
       console.error('Submit error:', e);
