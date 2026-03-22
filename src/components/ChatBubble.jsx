@@ -9,11 +9,14 @@ export const ChatBubble = ({ message, index }) => {
 
   const currentRole = normalizeRole(user?.role || userRole);
   const messageRole = normalizeRole(message.sender_role);
+  const hasExplicitOwnership = typeof message.isMine === 'boolean';
   const hasRoleAlignment = Boolean(currentRole && messageRole);
-  const isMine = hasRoleAlignment
-    ? messageRole === currentRole
-    : message.sender === 'user';
-  const isAI = !hasRoleAlignment && message.sender === 'ai';
+  const isMine = hasExplicitOwnership
+    ? message.isMine
+    : hasRoleAlignment
+      ? messageRole === currentRole
+      : message.sender === 'user';
+  const isAI = !hasExplicitOwnership && !hasRoleAlignment && message.sender === 'ai';
 
   return (
     <motion.div

@@ -26,21 +26,32 @@ const defaultState = {
   loading: true,
 };
 
+const normalizeRole = (value) =>
+  (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
 const normalizeChatMessage = (message, currentUserRole, mode) => {
+  const viewerRole = normalizeRole(currentUserRole);
+  const senderRole = normalizeRole(message.sender_role);
+
   if (mode === 'calm') {
+    const isMine = viewerRole && senderRole ? senderRole === viewerRole : undefined;
+
     return {
       ...message,
-      sender: message.sender_role === currentUserRole ? 'user' : 'partner',
+      ...(typeof isMine === 'boolean'
+        ? {
+            isMine,
+            sender: isMine ? 'user' : 'partner',
+          }
+        : {}),
     };
   }
 
   // Vent mode: ensure sender is normalised to 'user' or 'ai'
   if (message.sender === 'user' || message.sender === 'ai') return message;
-  // Fallback: if sender_role matches current user, it's theirs; otherwise AI
-  if (message.sender_role) {
-    return { ...message, sender: message.sender_role === currentUserRole ? 'user' : 'ai' };
+  if (senderRole && viewerRole) {
+    return { ...message, sender: senderRole === viewerRole ? 'user' : 'ai' };
   }
-  // If role field is present
   if (message.role === 'assistant' || message.role === 'ai') {
     return { ...message, sender: 'ai' };
   }
