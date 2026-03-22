@@ -103,9 +103,14 @@ const Chat = () => {
 
   const handleGoalSubmit = async () => {
     if (!goalText.trim()) return;
-    await addGoal(goalText, selectedTag);
-    setGoalText('');
-    setShowGoalInput(false);
+    try {
+      await addGoal(goalText, selectedTag);
+      setGoalText('');
+      setShowGoalInput(false);
+      toast.success('Goal added! 🎯');
+    } catch (e) {
+      toast.error('Failed to add goal');
+    }
   };
 
   const handleModeSwitch = (newMode) => {
