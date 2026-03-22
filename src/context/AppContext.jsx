@@ -34,16 +34,14 @@ const normalizeChatMessage = (message, currentUserRole, mode) => {
   const senderRole = normalizeRole(message.sender_role);
 
   if (mode === 'calm') {
-    const isMine = viewerRole && senderRole ? senderRole === viewerRole : undefined;
+    const isMine = viewerRole && senderRole ? senderRole === viewerRole : false;
 
     return {
       ...message,
-      ...(typeof isMine === 'boolean'
-        ? {
-            isMine,
-            sender: isMine ? 'user' : 'partner',
-          }
-        : {}),
+      isMine,
+      sender: viewerRole && senderRole
+        ? (isMine ? 'user' : 'partner')
+        : message.sender,
     };
   }
 
@@ -156,10 +154,15 @@ export const AppProvider = ({ children }) => {
   const fetchMessages = useCallback(async (mode) => {
     try {
       const { data } = await api.get('/messages', { params: { mode } });
-      setState((s) => ({
-        ...s,
-        messages: (data.messages || data).map((message) => normalizeChatMessage(message, s.userRole, mode)),
-      }));
+      setState((s) => {
+        const currentRole = s.userRole || s.user?.role || '';
+        return {
+          ...s,
+          messages: (data.messages || data).map((message) =>
+            normalizeChatMessage(message, currentRole, mode)
+          ),
+        };
+      });
     } catch (e) {
       console.error('Failed to fetch messages:', e);
     }
