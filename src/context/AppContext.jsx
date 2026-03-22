@@ -29,21 +29,21 @@ const defaultState = {
 const normalizeRole = (value) =>
   (typeof value === 'string' ? value.trim().toLowerCase() : '');
 
-const normalizeChatMessage = (message, currentUserRole, mode) => {
-  const viewerRole = normalizeRole(currentUserRole);
-  const senderRole = normalizeRole(message.sender_role);
-
+const normalizeChatMessage = (message, currentUserId, mode) => {
   if (mode === 'calm') {
-    const isMine = viewerRole && senderRole ? senderRole === viewerRole : false;
+    const isMine = currentUserId && message.sender_id
+      ? String(message.sender_id) === String(currentUserId)
+      : false;
 
     return {
       ...message,
       isMine,
-      sender: viewerRole && senderRole
-        ? (isMine ? 'user' : 'partner')
-        : message.sender,
+      sender: isMine ? 'user' : 'partner',
     };
   }
+
+  const viewerRole = normalizeRole(typeof currentUserId === 'object' ? '' : '');
+  const senderRole = normalizeRole(message.sender_role);
 
   // Vent mode: ensure sender is normalised to 'user' or 'ai'
   if (message.sender === 'user' || message.sender === 'ai') return message;
