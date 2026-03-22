@@ -1,11 +1,21 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
+import { Copy, Check, X } from 'lucide-react';
 
 const Dashboard = () => {
   const state = useApp();
   const { userName, partnerName, isLinked, logout } = state;
   const navigate = useNavigate();
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(state.user.couple_code);
+    setCopied(true);
+    setTimeout(() => setShowCodeModal(false), 800);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -42,17 +52,47 @@ const Dashboard = () => {
               Connected with {partnerName} 🧡
             </p>
           ) : state.user?.couple_code && (
-            <div className="inline-flex items-center gap-2 mt-1 px-3 py-1.5 rounded-md bg-muted text-sm font-body text-muted-foreground">
-              <span>Your couple code: <strong className="text-foreground">{state.user.couple_code}</strong></span>
-              <button
-                onClick={() => { navigator.clipboard.writeText(state.user.couple_code); }}
-                className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-              >
-                Copy
-              </button>
-            </div>
+            <button
+              onClick={() => { setShowCodeModal(true); setCopied(false); }}
+              className="mt-1 text-xs px-3 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-body"
+            >
+              View Your Code
+            </button>
           )}
         </motion.div>
+
+      {/* Couple Code Modal */}
+      <AnimatePresence>
+        {showCodeModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+            onClick={() => setShowCodeModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-card border border-border rounded-xl p-6 shadow-lg w-72 text-center relative"
+            >
+              <button onClick={() => setShowCodeModal(false)} className="absolute top-2 right-2 text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+              <p className="text-sm text-muted-foreground font-body mb-3">Share this code with your partner</p>
+              <p className="text-2xl font-heading font-bold text-foreground tracking-widest mb-4">{state.user.couple_code}</p>
+              <button
+                onClick={handleCopy}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-body hover:bg-primary/90 transition-colors"
+              >
+                {copied ? <><Check className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy Code</>}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
         {/* CTA Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
