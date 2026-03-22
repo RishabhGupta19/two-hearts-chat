@@ -181,7 +181,7 @@ const Dashboard = () => {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-card border border-border rounded-xl p-6 shadow-lg w-full max-w-sm relative"
+              className="bg-card border border-border rounded-xl p-5 shadow-lg w-72 relative"
             >
               <button onClick={() => setShowLinkModal(false)} className="absolute top-3 right-3 text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
