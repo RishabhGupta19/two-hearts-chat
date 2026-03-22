@@ -34,16 +34,14 @@ const normalizeChatMessage = (message, currentUserRole, mode) => {
   const senderRole = normalizeRole(message.sender_role);
 
   if (mode === 'calm') {
-    const isMine = viewerRole && senderRole ? senderRole === viewerRole : undefined;
+    const isMine = viewerRole && senderRole ? senderRole === viewerRole : false;
 
     return {
       ...message,
-      ...(typeof isMine === 'boolean'
-        ? {
-            isMine,
-            sender: isMine ? 'user' : 'partner',
-          }
-        : {}),
+      isMine,
+      sender: viewerRole && senderRole
+        ? (isMine ? 'user' : 'partner')
+        : message.sender,
     };
   }
 
