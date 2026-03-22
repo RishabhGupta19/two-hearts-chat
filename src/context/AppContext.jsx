@@ -21,7 +21,7 @@ const defaultState = {
   isLinked: false,
   assessmentCompleted: false,
   assessmentProfile: null,
-  mode: 'calm',
+  mode: localStorage.getItem('chat_mode') || 'calm',
   messages: [],
   goals: [],
   loading: true,
