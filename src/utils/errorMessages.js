@@ -16,9 +16,13 @@ export function friendlyError(err) {
     return 'Service quota reached. Please check your plan or try again later.';
   }
 
-  // Auth
+  // Auth – wrong credentials on login
   if (status === 401) {
-    return 'Your session has expired. Please log in again.';
+    const msg = (serverMsg || '').toLowerCase();
+    if (/invalid|incorrect|wrong|credentials|password|not found/i.test(msg)) {
+      return 'Incorrect email or password. Please try again.';
+    }
+    return 'Incorrect email or password. Please try again.';
   }
   if (status === 403) {
     return 'You do not have permission to do that.';
