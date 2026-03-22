@@ -81,7 +81,7 @@ const Chat = () => {
       if (!isLinked) return;
       const sent = wsSend({
         text,
-        sender_role: userRole,
+        sender_role: resolvedRole,
         sender_name: userName,
       });
       if (!sent) {
