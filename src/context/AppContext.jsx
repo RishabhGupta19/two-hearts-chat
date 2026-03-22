@@ -15,6 +15,7 @@ const defaultState = {
   userName: '',
   userEmail: '',
   userRole: null,
+  nickname: '',
   coupleId: null,
   partnerName: '',
   isLinked: false,
@@ -81,6 +82,7 @@ export const AppProvider = ({ children }) => {
       userName: user.name || '',
       userEmail: user.email || '',
       userRole: user.role || null,
+      nickname: user.nickname || '',
       coupleId: user.couple_id || null,
       partnerName: user.partner_name || '',
       isLinked: user.is_linked || false,
@@ -145,6 +147,10 @@ export const AppProvider = ({ children }) => {
 
   const completeAssessment = useCallback((profile) => {
     setState((s) => ({ ...s, assessmentCompleted: true, assessmentProfile: profile }));
+  }, []);
+
+  const setNickname = useCallback((nickname) => {
+    setState((s) => ({ ...s, nickname }));
   }, []);
 
   const setMode = useCallback((mode) => {
@@ -300,6 +306,7 @@ export const AppProvider = ({ children }) => {
         generateCoupleId,
         linkPartner,
         completeAssessment,
+        setNickname,
         setMode,
         sendMessage,
         fetchMessages,
