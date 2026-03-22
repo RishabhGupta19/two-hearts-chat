@@ -16,6 +16,11 @@ export function friendlyError(err) {
     return 'Service quota reached. Please check your plan or try again later.';
   }
 
+  // Auth – duplicate registration
+  if (status === 409 || (status === 400 && /already|exists|registered|duplicate/i.test(serverMsg || ''))) {
+    return 'This email is already registered. Please sign in instead.';
+  }
+
   // Auth – wrong credentials on login
   if (status === 401) {
     const msg = (serverMsg || '').toLowerCase();
