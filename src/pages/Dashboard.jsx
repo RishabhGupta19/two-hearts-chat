@@ -83,7 +83,7 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background">
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-border">
-        <h1 className="font-heading text-xl font-bold text-foreground">UsTwo</h1>
+        <h1 className="font-heading text-xl font-bold text-foreground">Solace</h1>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium text-primary">
