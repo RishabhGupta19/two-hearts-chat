@@ -2,19 +2,81 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
-import { Copy, Check, X } from 'lucide-react';
+import { Copy, Check, X, Heart, Users, UserPlus, Loader2, Link } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 const Dashboard = () => {
   const state = useApp();
-  const { userName, partnerName, isLinked, logout } = state;
+  const { userName, partnerName, isLinked, logout, generateCoupleId, linkPartner } = state;
   const navigate = useNavigate();
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Partner linking modal state
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkView, setLinkView] = useState('choose');
+  const [partnerCode, setPartnerCode] = useState('');
+  const [partnerNameInput, setPartnerNameInput] = useState('');
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkError, setLinkError] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const displayCode = state.coupleId || state.user?.couple_code;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(state.user.couple_code);
     setCopied(true);
     setTimeout(() => setShowCodeModal(false), 800);
+  };
+
+  const openLinkModal = () => {
+    setShowLinkModal(true);
+    setLinkView('choose');
+    setPartnerCode('');
+    setPartnerNameInput('');
+    setLinkError('');
+    setLinkCopied(false);
+  };
+
+  const handleFirst = async () => {
+    if (displayCode) {
+      setLinkView('first');
+      return;
+    }
+    setLinkLoading(true);
+    setLinkError('');
+    try {
+      await generateCoupleId();
+      setLinkView('first');
+    } catch (err) {
+      setLinkError(err.response?.data?.error || 'Failed to generate code');
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const handleLinkCopy = () => {
+    navigator.clipboard.writeText(displayCode);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 1500);
+  };
+
+  const handleLinkPartner = async () => {
+    if (!partnerCode || partnerCode.length < 5) {
+      setLinkError('Please enter a valid code');
+      return;
+    }
+    setLinkLoading(true);
+    setLinkError('');
+    try {
+      await linkPartner(partnerCode, partnerNameInput || 'Partner');
+      setLinkView('linked');
+      setTimeout(() => setShowLinkModal(false), 2000);
+    } catch (err) {
+      setLinkError(err.response?.data?.error || 'Failed to link partner');
+    } finally {
+      setLinkLoading(false);
+    }
   };
 
   return (
@@ -51,13 +113,23 @@ const Dashboard = () => {
             <p className="text-sm text-muted-foreground font-body">
               Connected with {partnerName} 🧡
             </p>
-          ) : state.user?.couple_code && (
-            <button
-              onClick={() => { setShowCodeModal(true); setCopied(false); }}
-              className="mt-1 text-xs px-3 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-body"
-            >
-              View Your Code
-            </button>
+          ) : (
+            <div className="flex items-center justify-center gap-2 mt-2">
+              {state.user?.couple_code && (
+                <button
+                  onClick={() => { setShowCodeModal(true); setCopied(false); }}
+                  className="text-xs px-3 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-body"
+                >
+                  View Your Code
+                </button>
+              )}
+              <button
+                onClick={openLinkModal}
+                className="text-xs px-3 py-1 rounded-full bg-accent text-accent-foreground hover:bg-accent/80 transition-colors font-body inline-flex items-center gap-1"
+              >
+                <Link className="h-3 w-3" /> Link Partner
+              </button>
+            </div>
           )}
         </motion.div>
 
@@ -89,6 +161,160 @@ const Dashboard = () => {
               >
                 {copied ? <><Check className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy Code</>}
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Partner Linking Modal */}
+      <AnimatePresence>
+        {showLinkModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+            onClick={() => setShowLinkModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-card border border-border rounded-xl p-6 shadow-lg w-full max-w-sm relative"
+            >
+              <button onClick={() => setShowLinkModal(false)} className="absolute top-3 right-3 text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+
+              {linkError && (
+                <motion.p
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-xs text-destructive mb-3 font-body text-center"
+                >
+                  {linkError}
+                </motion.p>
+              )}
+
+              <AnimatePresence mode="wait">
+                {linkView === 'choose' && (
+                  <motion.div key="choose" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                      <Heart className="h-6 w-6 text-primary" />
+                    </div>
+                    <h3 className="font-heading text-lg font-semibold text-foreground mb-1">Connect with your partner</h3>
+                    <p className="text-xs text-muted-foreground mb-5 font-body">Link your accounts together</p>
+
+                    <div className="space-y-2">
+                      <button
+                        onClick={handleFirst}
+                        disabled={linkLoading}
+                        className="w-full rounded-lg border border-border bg-card p-4 text-left hover:border-primary/50 transition-all flex items-center gap-3 group"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <Users className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-heading text-sm font-semibold text-foreground">I'm the first to register</p>
+                          <p className="text-xs text-muted-foreground font-body">Generate a code for your partner</p>
+                        </div>
+                        {linkLoading && <Loader2 className="h-4 w-4 animate-spin text-primary ml-auto" />}
+                      </button>
+
+                      <button
+                        onClick={() => { setLinkView('partner'); setLinkError(''); }}
+                        className="w-full rounded-lg border border-border bg-card p-4 text-left hover:border-primary/50 transition-all flex items-center gap-3 group"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <UserPlus className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-heading text-sm font-semibold text-foreground">I have a registered partner</p>
+                          <p className="text-xs text-muted-foreground font-body">Enter your partner's code</p>
+                        </div>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {linkView === 'first' && (
+                  <motion.div key="first" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="text-center">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                      <Copy className="h-5 w-5 text-primary" />
+                    </div>
+                    <h3 className="font-heading text-lg font-semibold text-foreground mb-1">Your Couple Code</h3>
+                    <p className="text-xs text-muted-foreground mb-4 font-body">Share this code with your partner</p>
+
+                    <div className="inline-block rounded-xl bg-primary/10 px-6 py-3 mb-4">
+                      <span className="font-heading text-2xl font-bold text-primary tracking-widest">{displayCode}</span>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setLinkView('choose'); setLinkError(''); }}
+                        className="flex-1 rounded-md bg-muted py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/80 transition-colors font-body"
+                      >
+                        ← Back
+                      </button>
+                      <button
+                        onClick={handleLinkCopy}
+                        className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors font-body inline-flex items-center justify-center gap-1.5"
+                      >
+                        {linkCopied ? <><Check className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy Code</>}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {linkView === 'partner' && (
+                  <motion.div key="partner" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="text-center">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                      <UserPlus className="h-5 w-5 text-primary" />
+                    </div>
+                    <h3 className="font-heading text-lg font-semibold text-foreground mb-1">Enter Partner's Code</h3>
+                    <p className="text-xs text-muted-foreground mb-4 font-body">Paste the code your partner shared</p>
+
+                    <div className="space-y-2 mb-4">
+                      <Input
+                        value={partnerCode}
+                        onChange={(e) => setPartnerCode(e.target.value)}
+                        placeholder="Enter couple code"
+                        className="text-center text-lg font-heading"
+                      />
+                      <Input
+                        value={partnerNameInput}
+                        onChange={(e) => setPartnerNameInput(e.target.value)}
+                        placeholder="Partner's name"
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setLinkView('choose'); setLinkError(''); }}
+                        className="flex-1 rounded-md bg-muted py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/80 transition-colors font-body"
+                      >
+                        ← Back
+                      </button>
+                      <button
+                        onClick={handleLinkPartner}
+                        disabled={linkLoading}
+                        className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors font-body inline-flex items-center justify-center gap-1.5"
+                      >
+                        {linkLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        Link Accounts
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {linkView === 'linked' && (
+                  <motion.div key="linked" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-6">
+                    <motion.div animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 0.6 }} className="text-4xl mb-3">🧡</motion.div>
+                    <h3 className="font-heading text-lg font-semibold text-foreground">You're now connected!</h3>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           </motion.div>
         )}
