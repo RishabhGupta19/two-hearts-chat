@@ -115,14 +115,7 @@ const Dashboard = () => {
             </p>
           ) : (
             <div className="flex items-center justify-center gap-2 mt-2">
-              {state.user?.couple_code && (
-                <button
-                  onClick={() => { setShowCodeModal(true); setCopied(false); }}
-                  className="text-xs px-3 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-body"
-                >
-                  View Your Code
-                </button>
-              )}
+              
               <button
                 onClick={openLinkModal}
                 className="text-xs px-3 py-1 rounded-full bg-accent text-accent-foreground hover:bg-accent/80 transition-colors font-body inline-flex items-center gap-1"

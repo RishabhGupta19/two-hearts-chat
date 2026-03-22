@@ -37,9 +37,20 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { action, answers, userName } = await req.json();
+    let body = {} as any;
+    try {
+      body = await req.json();
+    } catch (e) {
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { action, answers, userName } = body;
+
+    // Fail fast if API key is not set and provide a clear message
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) {
+      console.error('LOVABLE_API_KEY is not configured');
+      return new Response(JSON.stringify({ error: 'Server configuration error: LOVABLE_API_KEY not set' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     if (action === "generate_questions") {
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -58,21 +69,14 @@ serve(async (req: Request) => {
       });
 
       if (!response.ok) {
-        if (response.status === 429) {
-          return new Response(JSON.stringify({ error: "Rate limited, please try again shortly." }), {
-            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        if (response.status === 402) {
-          return new Response(JSON.stringify({ error: "Credits exhausted. Please add funds." }), {
-            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
         const t = await response.text();
         console.error("AI gateway error:", response.status, t);
-        return new Response(JSON.stringify({ error: "AI service error" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        // Forward client/4xx errors from the gateway back to the caller so they can act (e.g., invalid API key)
+        if (response.status >= 400 && response.status < 500) {
+          return new Response(JSON.stringify({ error: t }), { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        // For 5xx from gateway, return a generic server error
+        return new Response(JSON.stringify({ error: 'AI service error' }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       const data = await response.json();
@@ -121,9 +125,10 @@ serve(async (req: Request) => {
       if (!summaryResponse.ok) {
         const t = await summaryResponse.text();
         console.error("Summary error:", summaryResponse.status, t);
-        return new Response(JSON.stringify({ error: "Failed to summarize" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        if (summaryResponse.status >= 400 && summaryResponse.status < 500) {
+          return new Response(JSON.stringify({ error: t }), { status: summaryResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({ error: 'AI service error' }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       const summaryData = await summaryResponse.json();

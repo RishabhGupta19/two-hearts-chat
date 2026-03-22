@@ -141,8 +141,37 @@ export const AppProvider = ({ children }) => {
       setState((s) => ({ ...s, messages: [...s.messages, aiMsg] }));
       return aiMsg;
     } catch (e) {
-      console.error('Failed to send message:', e);
-      throw e;
+      // More verbose logging for debugging backend 500s
+      console.error('Failed to send message:', e?.message || e);
+      if (e?.response) {
+        console.error('Response status:', e.response.status);
+        console.error('Response data:', e.response.data);
+      }
+      console.error('Request payload example:', { message: text, mode: state.mode });
+      // If the error indicates an invalid/absent AI key or AI gateway problem,
+      // fall back to a local canned AI response so the chat remains usable.
+      const body = e?.response?.data || '';
+      const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+      const looksLikeKeyError = /key not valid|invalid api key|INVALID_ARGUMENT|LOVABLE_API_KEY|not configured/i.test(bodyStr || e?.message || '');
+      const looksLikeGatewayError = e?.response?.status >= 500 || /AI service error|gateway/i.test(bodyStr || '');
+
+      if (looksLikeKeyError || looksLikeGatewayError) {
+        console.warn('Using local AI fallback reply due to upstream error.');
+        const aiFallback = {
+          id: Date.now().toString(),
+          sender: 'ai',
+          text: "I'm having trouble reaching my AI service right now. Here's a supportive reply: I hear you — tell me more when you're ready.",
+          timestamp: new Date().toISOString(),
+          mode: state.mode,
+        };
+        setState((s) => ({ ...s, messages: [...s.messages, aiFallback] }));
+        return aiFallback;
+      }
+
+      // Re-throw with some context so callers (UI) can present a friendly message
+      const err = new Error(e?.response?.data?.error || e.message || 'Failed to send message');
+      err.details = e;
+      throw err;
     }
   }, [state.mode]);
 
@@ -157,7 +186,7 @@ export const AppProvider = ({ children }) => {
   const resolveVent = useCallback(async () => {
     try {
       await api.post('/chat/resolve');
-      setState((s) => ({ ...s, mode: 'calm' }));
+      setState((s) => ({ ...s, messages: [], mode: 'calm' }));
     } catch (e) {
       console.error('Failed to resolve:', e);
     }

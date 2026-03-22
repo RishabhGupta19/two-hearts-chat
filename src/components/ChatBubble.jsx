@@ -31,7 +31,7 @@ export const ChatBubble = ({ message, index }) => {
         }
         <p className="leading-relaxed">{message.text}</p>
         <span className="text-[10px] opacity-60 mt-1 block">
-          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>
     </motion.div>);
