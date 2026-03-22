@@ -179,7 +179,12 @@ export const AppProvider = ({ children }) => {
     setState((s) => {
       // Avoid duplicates by id
       if (msg.id && s.messages.some((m) => m.id === msg.id)) return s;
-      return { ...s, messages: [...s.messages, msg] };
+      // Tag as 'user' (self) or 'partner' based on sender_role matching current role
+      const normalized = {
+        ...msg,
+        sender: msg.sender_role === s.userRole ? 'user' : 'partner',
+      };
+      return { ...s, messages: [...s.messages, normalized] };
     });
   }, []);
 
