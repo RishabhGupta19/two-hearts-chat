@@ -42,18 +42,22 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
     };
   }
 
-  // Vent mode: ensure sender is normalised to 'user' or 'ai'
-  if (message.sender === 'user' || message.sender === 'ai') return message;
-  if (currentUserId && message.sender_id && String(message.sender_id) === String(currentUserId)) {
-    return { ...message, sender: 'user' };
-  }
-  if (message.role === 'assistant' || message.role === 'ai') {
-    return { ...message, sender: 'ai' };
-  }
-  if (message.role === 'user') {
-    return { ...message, sender: 'user' };
-  }
-  return message;
+  const isAI =
+    message.sender === 'ai' ||
+    message.role === 'assistant' ||
+    message.role === 'ai';
+
+  const isMine = isAI
+    ? false
+    : currentUserId && message.sender_id
+      ? String(message.sender_id) === String(currentUserId)
+      : message.sender === 'user' || message.role === 'user';
+
+  return {
+    ...message,
+    isMine,
+    sender: isAI ? 'ai' : 'user',
+  };
 };
 
 export const AppProvider = ({ children }) => {
@@ -169,12 +173,19 @@ export const AppProvider = ({ children }) => {
     try {
       // Save user message
       const { data: userMsg } = await api.post('/messages', { text, mode: state.mode });
-      setState((s) => ({ ...s, messages: [...s.messages, userMsg] }));
+      setState((s) => ({
+        ...s,
+        messages: [...s.messages, normalizeChatMessage(userMsg, s.user?.id || '', s.mode)],
+      }));
 
       // Get AI response
       const { data: aiMsg } = await api.post('/chat/ai-respond', { message: text, mode: state.mode });
-      setState((s) => ({ ...s, messages: [...s.messages, aiMsg] }));
-      return aiMsg;
+      const normalizedAiMsg = normalizeChatMessage(aiMsg, state.user?.id || '', state.mode);
+      setState((s) => ({
+        ...s,
+        messages: [...s.messages, normalizeChatMessage(aiMsg, s.user?.id || '', s.mode)],
+      }));
+      return normalizedAiMsg;
     } catch (e) {
       // More verbose logging for debugging backend 500s
       console.error('Failed to send message:', e?.message || e);
@@ -199,8 +210,9 @@ export const AppProvider = ({ children }) => {
           timestamp: new Date().toISOString(),
           mode: state.mode,
         };
-        setState((s) => ({ ...s, messages: [...s.messages, aiFallback] }));
-        return aiFallback;
+        const normalizedFallback = normalizeChatMessage(aiFallback, state.user?.id || '', state.mode);
+        setState((s) => ({ ...s, messages: [...s.messages, normalizedFallback] }));
+        return normalizedFallback;
       }
 
       // Re-throw with some context so callers (UI) can present a friendly message
