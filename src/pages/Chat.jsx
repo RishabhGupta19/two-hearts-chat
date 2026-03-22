@@ -1,21 +1,23 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
+import { useWebSocket } from '@/hooks/useWebSocket';
 import { ModeToggle } from '@/components/ModeToggle';
 import { ChatBubble } from '@/components/ChatBubble';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { ResolutionModal } from '@/components/ResolutionModal';
 import { Input } from '@/components/ui/input';
 import { ModeWrapper } from '@/components/ModeWrapper';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Link2Off } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyError } from '@/utils/errorMessages';
 
 const Chat = () => {
   const {
     mode, setMode, currentMessages, sendMessage, fetchMessages,
-    partnerName, addGoal, resolveVent,
+    partnerName, addGoal, resolveVent, isLinked, coupleId,
+    userName, userRole, addWsMessage,
   } = useApp();
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -28,6 +30,20 @@ const Chat = () => {
   const [pendingMode, setPendingMode] = useState(null);
   const chatEndRef = useRef(null);
   const navigate = useNavigate();
+
+  const isVent = mode === 'vent';
+  const isCalm = mode === 'calm';
+  const wsEnabled = isCalm && isLinked && !!coupleId;
+
+  const handleWsMessage = useCallback((msg) => {
+    addWsMessage(msg);
+  }, [addWsMessage]);
+
+  const { connected, send: wsSend } = useWebSocket({
+    coupleId,
+    enabled: wsEnabled,
+    onMessage: handleWsMessage,
+  });
 
   // Fetch messages when mode changes
   useEffect(() => {
@@ -42,13 +58,29 @@ const Chat = () => {
     if (!input.trim() || sending) return;
     const text = input;
     setInput('');
-    setSending(true);
-    try {
-      await sendMessage(text);
-    } catch (e) {
-      toast.error(friendlyError(e));
-    } finally {
-      setSending(false);
+
+    if (isCalm) {
+      // WebSocket send for calm mode
+      if (!isLinked) return;
+      const sent = wsSend({
+        text,
+        sender_role: userRole,
+        sender_name: userName,
+      });
+      if (!sent) {
+        toast.error('Not connected. Reconnecting...');
+        setInput(text); // restore input
+      }
+    } else {
+      // REST API for vent mode
+      setSending(true);
+      try {
+        await sendMessage(text);
+      } catch (e) {
+        toast.error(friendlyError(e));
+      } finally {
+        setSending(false);
+      }
     }
   };
 
@@ -77,7 +109,8 @@ const Chat = () => {
     setPendingMode(null);
   };
 
-  const isVent = mode === 'vent';
+  // Show "not linked" state for calm mode
+  const showNotLinkedMessage = isCalm && !isLinked;
 
   return (
     <ModeWrapper>
@@ -92,6 +125,9 @@ const Chat = () => {
               {(partnerName || 'P').charAt(0)}
             </div>
             <span className="text-xs font-body font-medium text-foreground truncate">{partnerName || 'Partner'}</span>
+            {isCalm && isLinked && (
+              <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500' : 'bg-muted-foreground/40'}`} title={connected ? 'Connected' : 'Reconnecting...'} />
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
@@ -131,28 +167,57 @@ const Chat = () => {
 
         {/* Chat area */}
         <div className={`flex-1 overflow-y-auto p-4 ${isVent ? 'angry-breathing' : ''}`}>
-          {currentMessages.length === 0 && (
+          {showNotLinkedMessage ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <span className="text-4xl block mb-3">{isVent ? '🫂' : '💬'}</span>
-                <p className="text-sm text-muted-foreground font-body">
-                  {isVent ? "Let it out. We're listening." : 'Start a conversation with your AI companion'}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center px-6"
+              >
+                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+                  <Link2Off className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium text-foreground font-body mb-1">
+                  Link with your partner to start calm chat
                 </p>
-              </div>
+                <p className="text-xs text-muted-foreground font-body mb-4">
+                  Share your couple code or enter your partner's code from the dashboard.
+                </p>
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => navigate('/dashboard')}
+                  className="rounded-pill bg-primary px-4 py-2 text-xs font-medium text-primary-foreground"
+                >
+                  Go to Dashboard
+                </motion.button>
+              </motion.div>
             </div>
+          ) : (
+            <>
+              {currentMessages.length === 0 && (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <span className="text-4xl block mb-3">{isVent ? '🫂' : '💬'}</span>
+                    <p className="text-sm text-muted-foreground font-body">
+                      {isVent ? "Let it out. We're listening." : 'Start a conversation with your partner'}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {currentMessages.map((msg, i) => (
+                <ChatBubble key={msg.id || i} message={msg} index={i} />
+              ))}
+              <AnimatePresence>
+                {sending && <TypingIndicator />}
+              </AnimatePresence>
+              <div ref={chatEndRef} />
+            </>
           )}
-          {currentMessages.map((msg, i) => (
-            <ChatBubble key={msg.id} message={msg} index={i} />
-          ))}
-          <AnimatePresence>
-            {sending && <TypingIndicator />}
-          </AnimatePresence>
-          <div ref={chatEndRef} />
         </div>
 
         {/* Goal input (calm mode only) */}
         <AnimatePresence>
-          {!isVent && showGoalInput && (
+          {isCalm && !showNotLinkedMessage && showGoalInput && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -196,34 +261,36 @@ const Chat = () => {
         </AnimatePresence>
 
         {/* Input bar */}
-        <div className="border-t border-border bg-card px-4 py-3">
-          {!isVent && (
-            <button
-              onClick={() => setShowGoalInput(!showGoalInput)}
-              className="text-xs text-primary font-medium font-body mb-2 hover:underline"
-            >
-              {showGoalInput ? '− Hide goal setter' : '+ Set a Goal for Today'}
-            </button>
-          )}
-          <div className="flex gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder={isVent ? "What's on your mind? Let it out..." : `Message ${partnerName || 'your companion'}...`}
-              className="rounded-[12px] text-sm flex-1"
-              disabled={sending}
-            />
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={handleSend}
-              disabled={sending}
-              className="rounded-pill bg-primary px-5 text-sm text-primary-foreground font-medium shadow-soft hover:bg-primary/90 transition-colors flex items-center gap-1.5"
-            >
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
-            </motion.button>
+        {!showNotLinkedMessage && (
+          <div className="border-t border-border bg-card px-4 py-3">
+            {isCalm && (
+              <button
+                onClick={() => setShowGoalInput(!showGoalInput)}
+                className="text-xs text-primary font-medium font-body mb-2 hover:underline"
+              >
+                {showGoalInput ? '− Hide goal setter' : '+ Set a Goal for Today'}
+              </button>
+            )}
+            <div className="flex gap-2">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                placeholder={isVent ? "What's on your mind? Let it out..." : `Message ${partnerName || 'your partner'}...`}
+                className="rounded-[12px] text-sm flex-1"
+                disabled={sending || (isCalm && !connected)}
+              />
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={handleSend}
+                disabled={sending || (isCalm && !connected)}
+                className="rounded-pill bg-primary px-5 text-sm text-primary-foreground font-medium shadow-soft hover:bg-primary/90 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
+              </motion.button>
+            </div>
           </div>
-        </div>
+        )}
 
         <ResolutionModal open={showResolution} onClose={() => setShowResolution(false)} />
 

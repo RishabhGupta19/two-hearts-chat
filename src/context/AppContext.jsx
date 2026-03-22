@@ -146,6 +146,14 @@ export const AppProvider = ({ children }) => {
     }
   }, [state.mode]);
 
+  const addWsMessage = useCallback((msg) => {
+    setState((s) => {
+      // Avoid duplicates by id
+      if (msg.id && s.messages.some((m) => m.id === msg.id)) return s;
+      return { ...s, messages: [...s.messages, msg] };
+    });
+  }, []);
+
   const resolveVent = useCallback(async () => {
     try {
       await api.post('/chat/resolve');
@@ -226,6 +234,7 @@ export const AppProvider = ({ children }) => {
         deleteGoal,
         fetchGoals,
         fetchUser,
+        addWsMessage,
       }}
     >
       {children}
