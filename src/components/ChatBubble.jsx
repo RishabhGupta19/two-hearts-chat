@@ -5,18 +5,15 @@ const normalizeRole = (value) =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
 
 export const ChatBubble = ({ message, index }) => {
-  const { user, userRole } = useApp();
+  const { user } = useApp();
 
-  const currentRole = normalizeRole(user?.role || userRole);
-  const messageRole = normalizeRole(message.sender_role);
   const hasExplicitOwnership = typeof message.isMine === 'boolean';
-  const hasRoleAlignment = Boolean(currentRole && messageRole);
   const isMine = hasExplicitOwnership
     ? message.isMine
-    : hasRoleAlignment
-      ? messageRole === currentRole
+    : user?.id && message.sender_id
+      ? String(message.sender_id) === String(user.id)
       : message.sender === 'user';
-  const isAI = !hasExplicitOwnership && !hasRoleAlignment && message.sender === 'ai';
+  const isAI = message.sender === 'ai';
 
   return (
     <motion.div

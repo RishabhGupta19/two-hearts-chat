@@ -155,11 +155,11 @@ export const AppProvider = ({ children }) => {
     try {
       const { data } = await api.get('/messages', { params: { mode } });
       setState((s) => {
-        const currentRole = s.userRole || s.user?.role || '';
+        const currentUserId = s.user?.id || '';
         return {
           ...s,
           messages: (data.messages || data).map((message) =>
-            normalizeChatMessage(message, currentRole, mode)
+            normalizeChatMessage(message, currentUserId, mode)
           ),
         };
       });
