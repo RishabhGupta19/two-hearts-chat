@@ -26,6 +26,17 @@ const defaultState = {
   loading: true,
 };
 
+const normalizeChatMessage = (message, currentUserRole, mode) => {
+  if (mode === 'calm') {
+    return {
+      ...message,
+      sender: message.sender_role === currentUserRole ? 'user' : 'partner',
+    };
+  }
+
+  return message;
+};
+
 export const AppProvider = ({ children }) => {
   const [state, setState] = useState(defaultState);
 
@@ -123,7 +134,7 @@ export const AppProvider = ({ children }) => {
       const { data } = await api.get('/messages', { params: { mode } });
       setState((s) => ({
         ...s,
-        messages: data.messages || data,
+        messages: (data.messages || data).map((message) => normalizeChatMessage(message, s.userRole, mode)),
       }));
     } catch (e) {
       console.error('Failed to fetch messages:', e);
@@ -179,11 +190,7 @@ export const AppProvider = ({ children }) => {
     setState((s) => {
       // Avoid duplicates by id
       if (msg.id && s.messages.some((m) => m.id === msg.id)) return s;
-      // Tag as 'user' (self) or 'partner' based on sender_role matching current role
-      const normalized = {
-        ...msg,
-        sender: msg.sender_role === s.userRole ? 'user' : 'partner',
-      };
+      const normalized = normalizeChatMessage(msg, s.userRole, 'calm');
       return { ...s, messages: [...s.messages, normalized] };
     });
   }, []);
