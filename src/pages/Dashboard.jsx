@@ -36,11 +36,21 @@ const Dashboard = () => {
           <h2 className="font-heading text-2xl font-semibold text-foreground mb-2">
             Welcome back, {userName}
           </h2>
-          {isLinked &&
-          <p className="text-sm text-muted-foreground font-body">
+          {isLinked ? (
+            <p className="text-sm text-muted-foreground font-body">
               Connected with {partnerName} 🧡
             </p>
-          }
+          ) : state.user?.couple_code && (
+            <div className="inline-flex items-center gap-2 mt-1 px-3 py-1.5 rounded-md bg-muted text-sm font-body text-muted-foreground">
+              <span>Your couple code: <strong className="text-foreground">{state.user.couple_code}</strong></span>
+              <button
+                onClick={() => { navigator.clipboard.writeText(state.user.couple_code); }}
+                className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+          )}
         </motion.div>
 
         {/* CTA Cards */}
