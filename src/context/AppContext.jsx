@@ -29,26 +29,23 @@ const defaultState = {
 const normalizeRole = (value) =>
   (typeof value === 'string' ? value.trim().toLowerCase() : '');
 
-const normalizeChatMessage = (message, currentUserRole, mode) => {
-  const viewerRole = normalizeRole(currentUserRole);
-  const senderRole = normalizeRole(message.sender_role);
-
+const normalizeChatMessage = (message, currentUserId, mode) => {
   if (mode === 'calm') {
-    const isMine = viewerRole && senderRole ? senderRole === viewerRole : false;
+    const isMine = currentUserId && message.sender_id
+      ? String(message.sender_id) === String(currentUserId)
+      : false;
 
     return {
       ...message,
       isMine,
-      sender: viewerRole && senderRole
-        ? (isMine ? 'user' : 'partner')
-        : message.sender,
+      sender: isMine ? 'user' : 'partner',
     };
   }
 
   // Vent mode: ensure sender is normalised to 'user' or 'ai'
   if (message.sender === 'user' || message.sender === 'ai') return message;
-  if (senderRole && viewerRole) {
-    return { ...message, sender: senderRole === viewerRole ? 'user' : 'ai' };
+  if (currentUserId && message.sender_id && String(message.sender_id) === String(currentUserId)) {
+    return { ...message, sender: 'user' };
   }
   if (message.role === 'assistant' || message.role === 'ai') {
     return { ...message, sender: 'ai' };
@@ -155,11 +152,11 @@ export const AppProvider = ({ children }) => {
     try {
       const { data } = await api.get('/messages', { params: { mode } });
       setState((s) => {
-        const currentRole = s.userRole || s.user?.role || '';
+        const currentUserId = s.user?.id || '';
         return {
           ...s,
           messages: (data.messages || data).map((message) =>
-            normalizeChatMessage(message, currentRole, mode)
+            normalizeChatMessage(message, currentUserId, mode)
           ),
         };
       });
@@ -217,7 +214,7 @@ export const AppProvider = ({ children }) => {
     setState((s) => {
       // Avoid duplicates by id
       if (msg.id && s.messages.some((m) => m.id === msg.id)) return s;
-      const normalized = normalizeChatMessage(msg, s.userRole, 'calm');
+      const normalized = normalizeChatMessage(msg, s.user?.id || '', 'calm');
       return { ...s, messages: [...s.messages, normalized] };
     });
   }, []);
