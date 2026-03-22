@@ -5,7 +5,7 @@ export const TypingIndicator = ({ label }) => {
   const { mode, partnerName } = useApp();
   const resolvedLabel = mode === 'calm'
     ? partnerName || 'Partner'
-    : label || 'AI Companion';
+    : label || 'Luna';
 
   return (
     <motion.div
