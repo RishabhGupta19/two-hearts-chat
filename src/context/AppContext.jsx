@@ -15,6 +15,7 @@ const defaultState = {
   userName: '',
   userEmail: '',
   userRole: null,
+  nickname: '',
   coupleId: null,
   partnerName: '',
   isLinked: false,
