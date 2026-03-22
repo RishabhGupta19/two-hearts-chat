@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import api from '@/api';
+import { requestNotificationPermission } from '@/firebase';
 
 const AppContext = createContext(null);
 
