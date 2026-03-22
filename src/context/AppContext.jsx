@@ -214,7 +214,7 @@ export const AppProvider = ({ children }) => {
     setState((s) => {
       // Avoid duplicates by id
       if (msg.id && s.messages.some((m) => m.id === msg.id)) return s;
-      const normalized = normalizeChatMessage(msg, s.userRole, 'calm');
+      const normalized = normalizeChatMessage(msg, s.user?.id || '', 'calm');
       return { ...s, messages: [...s.messages, normalized] };
     });
   }, []);
