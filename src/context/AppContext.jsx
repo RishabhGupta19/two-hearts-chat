@@ -149,6 +149,10 @@ export const AppProvider = ({ children }) => {
     setState((s) => ({ ...s, assessmentCompleted: true, assessmentProfile: profile }));
   }, []);
 
+  const setNickname = useCallback((nickname) => {
+    setState((s) => ({ ...s, nickname }));
+  }, []);
+
   const setMode = useCallback((mode) => {
     setState((s) => ({ ...s, mode }));
   }, []);
