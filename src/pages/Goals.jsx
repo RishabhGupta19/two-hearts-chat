@@ -5,7 +5,7 @@ import { useApp } from '@/context/AppContext';
 import { GoalCard } from '@/components/GoalCard';
 
 const Goals = () => {
-  const { goals, partnerName, userRole, fetchGoals } = useApp();
+  const { goals, partnerName, userRole, fetchGoals, setMode } = useApp();
   const navigate = useNavigate();
 
   useEffect(() => {
