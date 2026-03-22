@@ -28,6 +28,8 @@ const Chat = () => {
   const [showBanner, setShowBanner] = useState(true);
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [pendingMode, setPendingMode] = useState(null);
+  const [partnerTyping, setPartnerTyping] = useState(false);
+  const partnerTypingTimer = useRef(null);
   const chatEndRef = useRef(null);
   const navigate = useNavigate();
 
@@ -37,12 +39,20 @@ const Chat = () => {
 
   const handleWsMessage = useCallback((msg) => {
     addWsMessage(msg);
+    setPartnerTyping(false);
   }, [addWsMessage]);
 
-  const { connected, send: wsSend } = useWebSocket({
+  const handleWsTyping = useCallback(() => {
+    setPartnerTyping(true);
+    if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
+    partnerTypingTimer.current = setTimeout(() => setPartnerTyping(false), 3000);
+  }, []);
+
+  const { connected, send: wsSend, sendTyping } = useWebSocket({
     coupleId,
     enabled: wsEnabled,
     onMessage: handleWsMessage,
+    onTyping: handleWsTyping,
   });
 
   // Fetch messages when mode changes
@@ -53,6 +63,12 @@ const Chat = () => {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentMessages]);
+
+  // Send typing event in calm mode
+  const handleInputChange = (e) => {
+    setInput(e.target.value);
+    if (isCalm && connected) sendTyping();
+  };
 
   const handleSend = async () => {
     if (!input.trim() || sending) return;
@@ -208,7 +224,7 @@ const Chat = () => {
                 <ChatBubble key={msg.id || i} message={msg} index={i} />
               ))}
               <AnimatePresence>
-                {sending && <TypingIndicator />}
+                {(sending || (isCalm && partnerTyping)) && <TypingIndicator />}
               </AnimatePresence>
               <div ref={chatEndRef} />
             </>
@@ -274,7 +290,7 @@ const Chat = () => {
             <div className="flex gap-2">
               <Input
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                 placeholder={isVent ? "What's on your mind? Let it out..." : `Message ${partnerName || 'your partner'}...`}
                 className="rounded-[12px] text-sm flex-1"

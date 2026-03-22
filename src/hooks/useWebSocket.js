@@ -2,16 +2,18 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 
 const WS_BASE = import.meta.env.VITE_WS_BASE_URL || 'ws://127.0.0.1:8000';
 
-export const useWebSocket = ({ coupleId, enabled, onMessage }) => {
+export const useWebSocket = ({ coupleId, enabled, onMessage, onTyping }) => {
   const wsRef = useRef(null);
   const retryCount = useRef(0);
   const retryTimer = useRef(null);
   const [connected, setConnected] = useState(false);
   const enabledRef = useRef(enabled);
   const onMessageRef = useRef(onMessage);
+  const onTypingRef = useRef(onTyping);
 
   useEffect(() => { enabledRef.current = enabled; }, [enabled]);
   useEffect(() => { onMessageRef.current = onMessage; }, [onMessage]);
+  useEffect(() => { onTypingRef.current = onTyping; }, [onTyping]);
 
   const cleanup = useCallback(() => {
     if (retryTimer.current) clearTimeout(retryTimer.current);
@@ -41,7 +43,11 @@ export const useWebSocket = ({ coupleId, enabled, onMessage }) => {
     ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
-        onMessageRef.current?.(msg);
+        if (msg.type === 'typing') {
+          onTypingRef.current?.(msg);
+        } else {
+          onMessageRef.current?.(msg);
+        }
       } catch (err) {
         console.error('WS parse error:', err);
       }
@@ -80,5 +86,11 @@ export const useWebSocket = ({ coupleId, enabled, onMessage }) => {
     return false;
   }, []);
 
-  return { connected, send, cleanup };
+  const sendTyping = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'typing' }));
+    }
+  }, []);
+
+  return { connected, send, sendTyping, cleanup };
 };
