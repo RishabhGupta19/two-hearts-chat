@@ -234,6 +234,7 @@ export const AppProvider = ({ children }) => {
         deleteGoal,
         fetchGoals,
         fetchUser,
+        addWsMessage,
       }}
     >
       {children}
