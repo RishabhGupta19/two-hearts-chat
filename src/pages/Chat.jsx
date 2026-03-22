@@ -146,9 +146,7 @@ const Chat = () => {
                 <span className="text-xs font-body font-medium text-foreground truncate">{partnerName || 'Partner'}</span>
               </>
             )}
-            {isCalm && isLinked && (
-              <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500' : 'bg-muted-foreground/40'}`} title={connected ? 'Connected' : 'Reconnecting...'} />
-            )}
+            
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
@@ -177,7 +175,7 @@ const Chat = () => {
               className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between"
             >
               <span className="text-xs font-body text-foreground">
-                This is your safe space. Say what you feel. 🫂
+                This is your safe space. Say what you feel. 
               </span>
               <button onClick={() => setShowBanner(false)} className="text-xs text-muted-foreground hover:text-foreground">
                 ✕
@@ -218,7 +216,7 @@ const Chat = () => {
               {currentMessages.length === 0 && (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
-                    <span className="text-4xl block mb-3">{isVent ? '🫂' : '💬'}</span>
+                 
                     <p className="text-sm text-muted-foreground font-body">
                       {isVent ? "Let it out. We're listening." : 'Start a conversation with your partner'}
                     </p>
@@ -334,7 +332,7 @@ const Chat = () => {
                 onClick={(e) => e.stopPropagation()}
               >
                 <h3 className="font-heading text-lg font-semibold text-foreground mb-2">
-                  Switch to {pendingMode === 'vent' ? '😤 Vent' : '😊 Calm'} mode?
+                  Switch to {pendingMode === 'vent' ? ' Vent' : ' Calm'} mode?
                 </h3>
                 <p className="text-xs text-muted-foreground font-body mb-6">
                   Your input will be cleared. Your chat history stays.
