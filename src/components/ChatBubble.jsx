@@ -1,9 +1,6 @@
 import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 
-const normalizeRole = (value) =>
-  typeof value === 'string' ? value.trim().toLowerCase() : '';
-
 export const ChatBubble = ({ message, index }) => {
   const { user } = useApp();
 

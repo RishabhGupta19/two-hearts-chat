@@ -42,13 +42,10 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
     };
   }
 
-  const viewerRole = normalizeRole(typeof currentUserId === 'object' ? '' : '');
-  const senderRole = normalizeRole(message.sender_role);
-
   // Vent mode: ensure sender is normalised to 'user' or 'ai'
   if (message.sender === 'user' || message.sender === 'ai') return message;
-  if (senderRole && viewerRole) {
-    return { ...message, sender: senderRole === viewerRole ? 'user' : 'ai' };
+  if (currentUserId && message.sender_id && String(message.sender_id) === String(currentUserId)) {
+    return { ...message, sender: 'user' };
   }
   if (message.role === 'assistant' || message.role === 'ai') {
     return { ...message, sender: 'ai' };
