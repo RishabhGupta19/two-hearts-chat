@@ -18,7 +18,7 @@ export const ChatBubble = ({ message, index }) => {
       className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
       
       <div
-        className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm font-body ${
+        className={`max-w-[75%] rounded-2xl px-3 py-2 text-[13px] font-body ${
         isUser ?
         'bg-primary text-primary-foreground rounded-br-sm' :
         isAI ?
@@ -30,7 +30,7 @@ export const ChatBubble = ({ message, index }) => {
         <span className="text-xs font-medium text-muted-foreground block mb-1">AI Companion</span>
         }
         <p className="leading-relaxed">{message.text}</p>
-        <span className="text-[10px] opacity-60 mt-1 block">
+        <span className="text-[9px] opacity-60 mt-0.5 block">
           {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>
