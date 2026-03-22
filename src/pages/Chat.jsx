@@ -229,7 +229,8 @@ const Chat = () => {
                 <ChatBubble key={msg.id || i} message={msg} index={i} />
               ))}
               <AnimatePresence>
-                {(sending || (isCalm && partnerTyping)) && <TypingIndicator />}
+                {sending && <TypingIndicator label="AI Companion" />}
+                {isCalm && partnerTyping && <TypingIndicator label={partnerName || 'Partner'} />}
               </AnimatePresence>
               <div ref={chatEndRef} />
             </>
