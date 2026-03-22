@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 
 export const ChatBubble = ({ message, index }) => {
-  const { user } = useApp();
+  const { user, mode, partnerName } = useApp();
 
   const isAI = message.sender === 'ai';
   const isMine = isAI
@@ -12,6 +12,12 @@ export const ChatBubble = ({ message, index }) => {
       : user?.id && message.sender_id
         ? String(message.sender_id) === String(user.id)
         : message.sender === 'user';
+
+  const senderLabel = isAI
+    ? 'Luna'
+    : !isMine && mode === 'calm'
+      ? (partnerName || 'Partner')
+      : null;
 
   return (
     <motion.div
@@ -29,8 +35,8 @@ export const ChatBubble = ({ message, index }) => {
               : 'bg-secondary text-secondary-foreground rounded-bl-sm'
         }`}
       >
-        {isAI && (
-          <span className="mb-1 block text-xs font-medium text-muted-foreground">Luna</span>
+        {senderLabel && (
+          <span className="mb-1 block text-xs font-medium text-muted-foreground">{senderLabel}</span>
         )}
         <p className="leading-relaxed">{message.text}</p>
         <span className="mt-0.5 block text-[9px] opacity-60">
