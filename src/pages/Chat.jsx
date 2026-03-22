@@ -144,6 +144,9 @@ const Chat = () => {
           {currentMessages.map((msg, i) => (
             <ChatBubble key={msg.id} message={msg} index={i} />
           ))}
+          <AnimatePresence>
+            {sending && <TypingIndicator />}
+          </AnimatePresence>
           <div ref={chatEndRef} />
         </div>
 
