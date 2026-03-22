@@ -30,13 +30,21 @@ const Chat = () => {
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [pendingMode, setPendingMode] = useState(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
+  const [goalConfirmation, setGoalConfirmation] = useState('');
   const partnerTypingTimer = useRef(null);
+  const goalConfirmationTimer = useRef(null);
   const chatEndRef = useRef(null);
   const navigate = useNavigate();
 
   const isVent = mode === 'vent';
   const isCalm = mode === 'calm';
   const wsEnabled = isCalm && isLinked && !!coupleId;
+
+  const showGoalConfirmation = useCallback((message) => {
+    if (goalConfirmationTimer.current) clearTimeout(goalConfirmationTimer.current);
+    setGoalConfirmation(message);
+    goalConfirmationTimer.current = setTimeout(() => setGoalConfirmation(''), 2500);
+  }, []);
 
   const handleWsMessage = useCallback((msg) => {
     addWsMessage(msg);
@@ -64,6 +72,11 @@ const Chat = () => {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentMessages]);
+
+  useEffect(() => () => {
+    if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
+    if (goalConfirmationTimer.current) clearTimeout(goalConfirmationTimer.current);
+  }, []);
 
   // Send typing event in calm mode
   const handleInputChange = (e) => {
@@ -107,8 +120,10 @@ const Chat = () => {
       await addGoal(goalText, selectedTag);
       setGoalText('');
       setShowGoalInput(false);
+      showGoalConfirmation('Goal added for your partner');
       toast.success('Goal added! 🎯');
     } catch (e) {
+      setShowGoalInput(true);
       toast.error('Failed to add goal');
     }
   };
@@ -280,6 +295,21 @@ const Chat = () => {
                 >
                   Share
                 </motion.button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {goalConfirmation && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              className="px-4 pb-2"
+            >
+              <div className="rounded-pill border border-primary/20 bg-primary/10 px-4 py-2 text-center text-xs font-medium text-foreground">
+                {goalConfirmation}
               </div>
             </motion.div>
           )}
