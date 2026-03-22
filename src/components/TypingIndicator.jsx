@@ -1,24 +1,32 @@
 import { motion } from 'framer-motion';
+import { useApp } from '@/context/AppContext';
 
-export const TypingIndicator = ({ label = 'AI Companion' }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 10 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0, y: 10 }}
-    className="flex justify-start mb-3"
-  >
-    <div className="bg-card border border-border rounded-2xl rounded-bl-sm px-4 py-3 shadow-soft">
-      <span className="text-xs font-medium text-muted-foreground block mb-1">{label}</span>
-      <div className="flex items-center gap-1">
-        {[0, 1, 2].map((i) => (
-          <motion.span
-            key={i}
-            className="block w-2 h-2 rounded-full bg-muted-foreground/50"
-            animate={{ y: [0, -4, 0] }}
-            transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.15 }}
-          />
-        ))}
+export const TypingIndicator = ({ label }) => {
+  const { mode, partnerName } = useApp();
+  const resolvedLabel = mode === 'calm'
+    ? partnerName || 'Partner'
+    : label || 'AI Companion';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 10 }}
+      className="flex justify-start mb-3"
+    >
+      <div className="bg-card border border-border rounded-2xl rounded-bl-sm px-4 py-3 shadow-soft">
+        <span className="text-xs font-medium text-muted-foreground block mb-1">{resolvedLabel}</span>
+        <div className="flex items-center gap-1">
+          {[0, 1, 2].map((i) => (
+            <motion.span
+              key={i}
+              className="block w-2 h-2 rounded-full bg-muted-foreground/50"
+              animate={{ y: [0, -4, 0] }}
+              transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.15 }}
+            />
+          ))}
+        </div>
       </div>
-    </div>
-  </motion.div>
-);
+    </motion.div>
+  );
+};
