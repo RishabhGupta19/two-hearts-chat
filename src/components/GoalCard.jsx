@@ -14,7 +14,7 @@ const tagConfig = {
 const tagOptions = ['Growth', 'Us', 'Personal'];
 
 export const GoalCard = ({ goal }) => {
-  const { toggleGoalComplete, editGoal, deleteGoal, userRole } = useApp();
+  const { toggleGoalComplete, editGoal, deleteGoal, userRole, nickname, userName, partnerName } = useApp();
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(goal.text);
   const [editTag, setEditTag] = useState(goal.tag);
@@ -121,7 +121,7 @@ export const GoalCard = ({ goal }) => {
           {goal.completed && '✓'}
         </span>
         <span>{goal.completed ? 'Done' : 'Pending'}</span>
-        <span className="ml-auto">Set by {goal.setBy === 'gf' ? '💜 GF' : '💙 BF'}</span>
+        <span className="ml-auto">Set by {goal.setBy === userRole ? (nickname || userName || 'You') : (partnerName || 'Partner')}</span>
       </div>
     </motion.div>
   );
