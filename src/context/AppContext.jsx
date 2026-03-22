@@ -306,6 +306,7 @@ export const AppProvider = ({ children }) => {
         generateCoupleId,
         linkPartner,
         completeAssessment,
+        setNickname,
         setMode,
         sendMessage,
         fetchMessages,

@@ -7,6 +7,7 @@ import { AppProvider, useApp } from "@/context/AppContext";
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
 import Assessment from "./pages/Assessment";
+import NicknameSetup from "./pages/NicknameSetup";
 import PartnerLinking from "./pages/PartnerLinking";
 import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
@@ -17,7 +18,7 @@ import { Loader2 } from "lucide-react";
 const queryClient = new QueryClient();
 
 const AppRoutes = () => {
-  const { isAuthenticated, userRole, assessmentCompleted, isLinked, loading } = useApp();
+  const { isAuthenticated, userRole, assessmentCompleted, nickname, isLinked, loading } = useApp();
 
   if (loading) {
     return (
@@ -49,6 +50,15 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/assessment" element={<Assessment />} />
         <Route path="*" element={<Navigate to="/assessment" replace />} />
+      </Routes>
+    );
+  }
+
+  if (!nickname) {
+    return (
+      <Routes>
+        <Route path="/nickname" element={<NicknameSetup />} />
+        <Route path="*" element={<Navigate to="/nickname" replace />} />
       </Routes>
     );
   }
