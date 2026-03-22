@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `You are a relationship counselor designing a personalized assessment for a couple's communication app called UsTwo.
+const SYSTEM_PROMPT = `You are a relationship counselor designing a personalized assessment for a couple's communication app called Solace.
 
 Generate exactly 10 multiple-choice questions to understand the user's communication style, conflict resolution preferences, love language, and emotional needs.
 

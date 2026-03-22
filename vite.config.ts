@@ -22,8 +22,8 @@ export default defineConfig(({ mode }) => ({
         navigateFallbackDenylist: [/^\/~oauth/],
       },
       manifest: {
-        name: "UsTwo — A Space Just for the Two of You",
-        short_name: "UsTwo",
+        name: "Solace — A Space Just for the Two of You",
+        short_name: "Solace",
         description: "Your relationship companion — communicate, resolve conflicts, and grow together.",
         theme_color: "#c4885b",
         background_color: "#f7f3ef",
