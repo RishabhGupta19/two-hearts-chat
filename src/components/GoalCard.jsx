@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { format, parseISO } from 'date-fns';
 import { motion } from 'framer-motion';
 import { Pencil, Trash2, Check, X } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
@@ -108,7 +109,7 @@ export const GoalCard = ({ goal }) => {
               </button>
             </span>
           )}
-          <span className="text-xs text-muted-foreground">{goal.date}</span>
+          <span className="text-xs text-muted-foreground">{goal.date ? format(parseISO(goal.date), 'MMM d, yyyy') : ''}</span>
         </div>
       </div>
       <p className={`font-body text-sm leading-relaxed ${goal.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
