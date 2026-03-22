@@ -17,8 +17,9 @@ const Chat = () => {
   const {
     mode, setMode, currentMessages, sendMessage, fetchMessages,
     partnerName, addGoal, resolveVent, isLinked, coupleId,
-    userName, userRole, addWsMessage,
+    userName, userRole, user, addWsMessage,
   } = useApp();
+  const resolvedRole = userRole || user?.role || '';
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [showGoalInput, setShowGoalInput] = useState(false);
