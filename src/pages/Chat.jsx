@@ -137,10 +137,19 @@ const Chat = () => {
             <button onClick={() => navigate('/dashboard')} className="text-muted-foreground hover:text-foreground text-sm">
               ←
             </button>
-            <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
-              {(partnerName || 'P').charAt(0)}
-            </div>
-            <span className="text-xs font-body font-medium text-foreground truncate">{partnerName || 'Partner'}</span>
+            {isCalm ? (
+              <>
+                <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
+                  {(partnerName || 'P').charAt(0)}
+                </div>
+                <span className="text-xs font-body font-medium text-foreground truncate">{partnerName || 'Partner'}</span>
+              </>
+            ) : (
+              <>
+                <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[10px] shrink-0">🫂</div>
+                <span className="text-xs font-body font-medium text-foreground truncate">AI Companion</span>
+              </>
+            )}
             {isCalm && isLinked && (
               <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500' : 'bg-muted-foreground/40'}`} title={connected ? 'Connected' : 'Reconnecting...'} />
             )}
