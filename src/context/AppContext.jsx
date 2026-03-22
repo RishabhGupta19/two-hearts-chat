@@ -222,6 +222,8 @@ export const AppProvider = ({ children }) => {
         currentMessages,
         addGoal,
         toggleGoalComplete,
+        editGoal,
+        deleteGoal,
         fetchGoals,
         fetchUser,
       }}
