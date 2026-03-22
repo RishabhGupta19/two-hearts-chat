@@ -30,11 +30,25 @@ const defaultState = {
 const normalizeRole = (value) =>
   (typeof value === 'string' ? value.trim().toLowerCase() : '');
 
+const getMessageSenderId = (message) =>
+  message?.sender_id ?? message?.senderId ?? message?.user_id ?? message?.userId ?? null;
+
 const normalizeChatMessage = (message, currentUserId, mode) => {
+  const senderId = getMessageSenderId(message);
+  const hasExplicitOwnership = typeof message?.isMine === 'boolean';
+  const isOwnedByCurrentUser = currentUserId && senderId
+    ? String(senderId) === String(currentUserId)
+    : null;
+
   if (mode === 'calm') {
-    const isMine = currentUserId && message.sender_id
-      ? String(message.sender_id) === String(currentUserId)
-      : false;
+    const isMine = hasExplicitOwnership
+      ? message.isMine
+      : isOwnedByCurrentUser !== null
+        ? isOwnedByCurrentUser
+        : message.sender === 'user' ||
+          message.role === 'user' ||
+          message.is_self === true ||
+          message.mine === true;
 
     return {
       ...message,
@@ -50,9 +64,14 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
 
   const isMine = isAI
     ? false
-    : currentUserId && message.sender_id
-      ? String(message.sender_id) === String(currentUserId)
-      : message.sender === 'user' || message.role === 'user';
+    : hasExplicitOwnership
+      ? message.isMine
+      : isOwnedByCurrentUser !== null
+        ? isOwnedByCurrentUser
+        : message.sender === 'user' ||
+          message.role === 'user' ||
+          message.is_self === true ||
+          message.mine === true;
 
   return {
     ...message,
