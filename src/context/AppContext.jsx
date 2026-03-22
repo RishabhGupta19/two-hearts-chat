@@ -154,10 +154,15 @@ export const AppProvider = ({ children }) => {
   const fetchMessages = useCallback(async (mode) => {
     try {
       const { data } = await api.get('/messages', { params: { mode } });
-      setState((s) => ({
-        ...s,
-        messages: (data.messages || data).map((message) => normalizeChatMessage(message, s.userRole, mode)),
-      }));
+      setState((s) => {
+        const currentRole = s.userRole || s.user?.role || '';
+        return {
+          ...s,
+          messages: (data.messages || data).map((message) =>
+            normalizeChatMessage(message, currentRole, mode)
+          ),
+        };
+      });
     } catch (e) {
       console.error('Failed to fetch messages:', e);
     }
