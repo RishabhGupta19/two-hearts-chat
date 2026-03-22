@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 import { ModeToggle } from '@/components/ModeToggle';
 import { ChatBubble } from '@/components/ChatBubble';
+import { TypingIndicator } from '@/components/TypingIndicator';
 import { ResolutionModal } from '@/components/ResolutionModal';
 import { Input } from '@/components/ui/input';
 import { ModeWrapper } from '@/components/ModeWrapper';
@@ -143,6 +144,9 @@ const Chat = () => {
           {currentMessages.map((msg, i) => (
             <ChatBubble key={msg.id} message={msg} index={i} />
           ))}
+          <AnimatePresence>
+            {sending && <TypingIndicator />}
+          </AnimatePresence>
           <div ref={chatEndRef} />
         </div>
 
