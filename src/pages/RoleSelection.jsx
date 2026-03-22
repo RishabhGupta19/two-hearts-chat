@@ -41,7 +41,7 @@ const RoleSelection = () => {
           <p className="text-sm text-muted-foreground mb-8 font-body">Welcome, {userName}!</p>
 
           <div className="flex gap-4 justify-center">
-            {[['gf', '💜', 'I am the GF'], ['bf', '💙', 'I am the BF']].map(([role, emoji, label]) => (
+            {[['gf','I am the GF'], ['bf','I am the BF']].map(([role, emoji, label]) => (
               <motion.button
                 key={role}
                 whileTap={{ scale: 0.97 }}
