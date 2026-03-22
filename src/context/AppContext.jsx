@@ -82,6 +82,7 @@ export const AppProvider = ({ children }) => {
       userName: user.name || '',
       userEmail: user.email || '',
       userRole: user.role || null,
+      nickname: user.nickname || '',
       coupleId: user.couple_id || null,
       partnerName: user.partner_name || '',
       isLinked: user.is_linked || false,
