@@ -327,7 +327,7 @@ const Dashboard = () => {
             
             <span className="text-4xl block mb-3">💬</span>
             <h3 className="font-heading text-lg font-semibold text-foreground mb-1">Start Chatting</h3>
-            <p className="text-xs text-muted-foreground font-body">Talk with your AI companion</p>
+           
           </motion.button>
 
           <motion.button
