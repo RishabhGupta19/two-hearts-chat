@@ -121,7 +121,7 @@ export const GoalCard = ({ goal }) => {
           {goal.completed && '✓'}
         </span>
         <span>{goal.completed ? 'Done' : 'Pending'}</span>
-        <span className="ml-auto">Set by {goal.setBy === 'gf' ? '💜 GF' : '💙 BF'}</span>
+        <span className="ml-auto">Set by {goal.setBy === userRole ? (nickname || userName || 'You') : (partnerName || 'Partner')}</span>
       </div>
     </motion.div>
   );
