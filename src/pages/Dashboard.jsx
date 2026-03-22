@@ -200,38 +200,38 @@ const Dashboard = () => {
               <AnimatePresence mode="wait">
                 {linkView === 'choose' && (
                   <motion.div key="choose" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                      <Heart className="h-6 w-6 text-primary" />
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                      <Heart className="h-5 w-5 text-primary" />
                     </div>
-                    <h3 className="font-heading text-lg font-semibold text-foreground mb-1">Connect with your partner</h3>
-                    <p className="text-xs text-muted-foreground mb-5 font-body">Link your accounts together</p>
+                    <h3 className="font-heading text-base font-semibold text-foreground mb-0.5">Connect with your partner</h3>
+                    <p className="text-xs text-muted-foreground mb-4 font-body">Link your accounts together</p>
 
                     <div className="space-y-2">
                       <button
                         onClick={handleFirst}
                         disabled={linkLoading}
-                        className="w-full rounded-lg border border-border bg-card p-4 text-left hover:border-primary/50 transition-all flex items-center gap-3 group"
+                        className="w-full rounded-lg border border-border bg-card p-3 text-left hover:border-primary/50 transition-all flex items-center gap-2.5 group"
                       >
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                          <Users className="h-4 w-4 text-primary" />
+                        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <Users className="h-3.5 w-3.5 text-primary" />
                         </div>
                         <div>
-                          <p className="font-heading text-sm font-semibold text-foreground">I'm the first to register</p>
-                          <p className="text-xs text-muted-foreground font-body">Generate a code for your partner</p>
+                          <p className="font-heading text-xs font-semibold text-foreground">I'm the first to register</p>
+                          <p className="text-[11px] text-muted-foreground font-body">Generate a code for your partner</p>
                         </div>
-                        {linkLoading && <Loader2 className="h-4 w-4 animate-spin text-primary ml-auto" />}
+                        {linkLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary ml-auto" />}
                       </button>
 
                       <button
                         onClick={() => { setLinkView('partner'); setLinkError(''); }}
-                        className="w-full rounded-lg border border-border bg-card p-4 text-left hover:border-primary/50 transition-all flex items-center gap-3 group"
+                        className="w-full rounded-lg border border-border bg-card p-3 text-left hover:border-primary/50 transition-all flex items-center gap-2.5 group"
                       >
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                          <UserPlus className="h-4 w-4 text-primary" />
+                        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <UserPlus className="h-3.5 w-3.5 text-primary" />
                         </div>
                         <div>
-                          <p className="font-heading text-sm font-semibold text-foreground">I have a registered partner</p>
-                          <p className="text-xs text-muted-foreground font-body">Enter your partner's code</p>
+                          <p className="font-heading text-xs font-semibold text-foreground">I have a registered partner</p>
+                          <p className="text-[11px] text-muted-foreground font-body">Enter your partner's code</p>
                         </div>
                       </button>
                     </div>
