@@ -48,14 +48,14 @@ export const ResolutionModal = ({ open, onClose }) => {
                   onClick={handleResolved}
                   className="w-full rounded-pill bg-primary py-3 text-sm font-medium text-primary-foreground shadow-soft hover:bg-primary/90 transition-colors"
                 >
-                  ✅ Yes, we're good
+                   Yes, we're good
                 </motion.button>
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   onClick={onClose}
                   className="w-full rounded-pill bg-muted py-3 text-sm font-medium text-muted-foreground hover:bg-muted/80 transition-colors"
                 >
-                  💬 Not yet, keep going
+                   Not yet, keep going
                 </motion.button>
               </div>
             </motion.div>
