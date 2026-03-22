@@ -92,7 +92,7 @@ export const GoalCard = ({ goal }) => {
         </span>
         <div className="flex items-center gap-2">
           {isOwner && (
-            <span className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="flex items-center gap-1">
               <button
                 onClick={(e) => { e.stopPropagation(); setEditing(true); }}
                 className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
