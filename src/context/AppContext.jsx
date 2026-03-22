@@ -136,6 +136,7 @@ export const AppProvider = ({ children }) => {
     localStorage.setItem('access_token', data.access);
     localStorage.setItem('refresh_token', data.refresh);
     syncUserState(data.user);
+    requestNotificationPermission(api);
   }, []);
 
   const logout = useCallback(() => {

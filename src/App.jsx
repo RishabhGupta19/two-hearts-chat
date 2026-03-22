@@ -19,8 +19,25 @@ import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
 
+const useFirebaseForegroundMessages = () => {
+  useEffect(() => {
+    const listen = () => {
+      onMessageListener()
+        .then((payload) => {
+          toast(payload?.notification?.title || "New message", {
+            description: payload?.notification?.body || "",
+          });
+          listen(); // re-subscribe for next message
+        })
+        .catch((err) => console.error("FCM foreground error:", err));
+    };
+    listen();
+  }, []);
+};
+
 const AppRoutes = () => {
   const { isAuthenticated, userRole, assessmentCompleted, nickname, isLinked, loading } = useApp();
+  useFirebaseForegroundMessages();
 
   if (loading) {
     return (
