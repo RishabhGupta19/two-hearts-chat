@@ -30,7 +30,7 @@ export const ChatBubble = ({ message, index }) => {
         }`}
       >
         {isAI && (
-          <span className="mb-1 block text-xs font-medium text-muted-foreground">AI Companion</span>
+          <span className="mb-1 block text-xs font-medium text-muted-foreground">Luna</span>
         )}
         <p className="leading-relaxed">{message.text}</p>
         <span className="mt-0.5 block text-[9px] opacity-60">
