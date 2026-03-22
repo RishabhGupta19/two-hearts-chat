@@ -188,6 +188,22 @@ export const AppProvider = ({ children }) => {
     }
   }, []);
 
+  const editGoal = useCallback(async (id, text, tag) => {
+    const { data } = await api.patch(`/goals/${id}`, { text, tag });
+    setState((s) => ({
+      ...s,
+      goals: s.goals.map((g) => (g.id === id ? data : g)),
+    }));
+  }, []);
+
+  const deleteGoal = useCallback(async (id) => {
+    await api.delete(`/goals/${id}`);
+    setState((s) => ({
+      ...s,
+      goals: s.goals.filter((g) => g.id !== id),
+    }));
+  }, []);
+
   return (
     <AppContext.Provider
       value={{
@@ -206,6 +222,8 @@ export const AppProvider = ({ children }) => {
         currentMessages,
         addGoal,
         toggleGoalComplete,
+        editGoal,
+        deleteGoal,
         fetchGoals,
         fetchUser,
       }}
