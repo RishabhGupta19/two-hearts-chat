@@ -25,7 +25,7 @@ const Goals = () => {
           <h1 className="font-heading text-lg font-bold text-foreground">Goals</h1>
         </div>
         <button
-          onClick={() => navigate('/chat')}
+          onClick={() => { setMode('calm'); navigate('/chat'); }}
           className="text-xs text-primary font-medium font-body hover:underline"
         >
           + Add from Chat
