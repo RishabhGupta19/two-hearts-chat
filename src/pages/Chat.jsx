@@ -187,7 +187,7 @@ const Chat = () => {
         </AnimatePresence>
 
         {/* Chat area */}
-        <div className={`flex-1 overflow-y-auto p-4 ${isVent ? 'angry-breathing' : ''}`}>
+        <div className={`flex-1 overflow-y-auto p-4 flex flex-col justify-end ${isVent ? 'angry-breathing' : ''}`}>
           {showNotLinkedMessage ? (
             <div className="flex items-center justify-center h-full">
               <motion.div
