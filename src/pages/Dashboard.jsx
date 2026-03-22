@@ -240,28 +240,28 @@ const Dashboard = () => {
 
                 {linkView === 'first' && (
                   <motion.div key="first" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="text-center">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                      <Copy className="h-5 w-5 text-primary" />
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                      <Copy className="h-4 w-4 text-primary" />
                     </div>
-                    <h3 className="font-heading text-lg font-semibold text-foreground mb-1">Your Couple Code</h3>
-                    <p className="text-xs text-muted-foreground mb-4 font-body">Share this code with your partner</p>
+                    <h3 className="font-heading text-base font-semibold text-foreground mb-0.5">Your Couple Code</h3>
+                    <p className="text-xs text-muted-foreground mb-3 font-body">Share this code with your partner</p>
 
-                    <div className="inline-block rounded-xl bg-primary/10 px-6 py-3 mb-4">
-                      <span className="font-heading text-2xl font-bold text-primary tracking-widest">{displayCode}</span>
+                    <div className="inline-block rounded-xl bg-primary/10 px-5 py-2.5 mb-3">
+                      <span className="font-heading text-xl font-bold text-primary tracking-widest">{displayCode}</span>
                     </div>
 
                     <div className="flex gap-2">
                       <button
                         onClick={() => { setLinkView('choose'); setLinkError(''); }}
-                        className="flex-1 rounded-md bg-muted py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/80 transition-colors font-body"
+                        className="flex-1 rounded-md bg-muted py-2 text-xs font-medium text-muted-foreground hover:bg-muted/80 transition-colors font-body"
                       >
                         ← Back
                       </button>
                       <button
                         onClick={handleLinkCopy}
-                        className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors font-body inline-flex items-center justify-center gap-1.5"
+                        className="flex-1 rounded-md bg-primary py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors font-body inline-flex items-center justify-center gap-1.5"
                       >
-                        {linkCopied ? <><Check className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy Code</>}
+                        {linkCopied ? <><Check className="h-3 w-3" /> Copied!</> : <><Copy className="h-3 w-3" /> Copy Code</>}
                       </button>
                     </div>
                   </motion.div>
