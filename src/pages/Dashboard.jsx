@@ -269,39 +269,40 @@ const Dashboard = () => {
 
                 {linkView === 'partner' && (
                   <motion.div key="partner" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="text-center">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                      <UserPlus className="h-5 w-5 text-primary" />
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                      <UserPlus className="h-4 w-4 text-primary" />
                     </div>
-                    <h3 className="font-heading text-lg font-semibold text-foreground mb-1">Enter Partner's Code</h3>
-                    <p className="text-xs text-muted-foreground mb-4 font-body">Paste the code your partner shared</p>
+                    <h3 className="font-heading text-base font-semibold text-foreground mb-0.5">Enter Partner's Code</h3>
+                    <p className="text-xs text-muted-foreground mb-3 font-body">Paste the code your partner shared</p>
 
-                    <div className="space-y-2 mb-4">
+                    <div className="space-y-2 mb-3">
                       <Input
                         value={partnerCode}
                         onChange={(e) => setPartnerCode(e.target.value)}
                         placeholder="Enter couple code"
-                        className="text-center text-lg font-heading"
+                        className="text-center text-base font-heading h-9"
                       />
                       <Input
                         value={partnerNameInput}
                         onChange={(e) => setPartnerNameInput(e.target.value)}
                         placeholder="Partner's name"
+                        className="h-9"
                       />
                     </div>
 
                     <div className="flex gap-2">
                       <button
                         onClick={() => { setLinkView('choose'); setLinkError(''); }}
-                        className="flex-1 rounded-md bg-muted py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/80 transition-colors font-body"
+                        className="flex-1 rounded-md bg-muted py-2 text-xs font-medium text-muted-foreground hover:bg-muted/80 transition-colors font-body"
                       >
                         ← Back
                       </button>
                       <button
                         onClick={handleLinkPartner}
                         disabled={linkLoading}
-                        className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors font-body inline-flex items-center justify-center gap-1.5"
+                        className="flex-1 rounded-md bg-primary py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors font-body inline-flex items-center justify-center gap-1.5"
                       >
-                        {linkLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        {linkLoading && <Loader2 className="h-3 w-3 animate-spin" />}
                         Link Accounts
                       </button>
                     </div>
