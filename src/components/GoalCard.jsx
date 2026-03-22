@@ -14,7 +14,7 @@ const tagConfig = {
 const tagOptions = ['Growth', 'Us', 'Personal'];
 
 export const GoalCard = ({ goal }) => {
-  const { toggleGoalComplete, editGoal, deleteGoal, userRole } = useApp();
+  const { toggleGoalComplete, editGoal, deleteGoal, userRole, nickname, userName, partnerName } = useApp();
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(goal.text);
   const [editTag, setEditTag] = useState(goal.tag);
