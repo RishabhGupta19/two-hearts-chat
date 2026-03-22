@@ -154,6 +154,7 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const setMode = useCallback((mode) => {
+    localStorage.setItem('chat_mode', mode);
     setState((s) => ({ ...s, mode }));
   }, []);
 
