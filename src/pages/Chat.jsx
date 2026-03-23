@@ -161,7 +161,7 @@ const Chat = () => {
 
   return (
     <ModeWrapper>
-      <div className="flex h-[100dvh] min-h-0 flex-col relative" style={{ paddingTop: CHAT_SAFE_AREA.top }}>
+      <div className="flex h-[100dvh] min-h-0 flex-col relative">
 
         {/* Header */}
         <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
