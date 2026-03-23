@@ -162,8 +162,3 @@
 }
 
 /* Android PWA standalone: status bar overlaps content since safe-area-inset-top is 0 */
-@media (display-mode: standalone) {
-  #root {
-    padding-top: env(safe-area-inset-top, 24px);
-  }
-}

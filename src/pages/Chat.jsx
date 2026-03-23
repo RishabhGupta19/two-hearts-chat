@@ -340,7 +340,6 @@ const Chat = () => {
         {!showNotLinkedMessage && (
           <div
             className="border-t border-border bg-card px-3 pt-1.5 shrink-0"
-            style={{ paddingBottom: CHAT_SAFE_AREA.bottom }}
           >
             {isCalm && (
               <button
