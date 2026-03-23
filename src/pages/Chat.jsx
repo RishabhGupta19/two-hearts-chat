@@ -153,7 +153,7 @@ const Chat = () => {
     <ModeWrapper>
       <div className="flex flex-col h-[100dvh] relative">
         {/* Top bar */}
-        <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 sticky top-0" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 sticky top-0" style={{ paddingTop: 'max(env(safe-area-inset-top), 8px)' }}>
           <div className="flex items-center gap-2 min-w-0 shrink-0">
             <button onClick={() => navigate('/dashboard')} className="text-muted-foreground hover:text-foreground text-sm min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer active:opacity-70 relative z-10">
               ←
