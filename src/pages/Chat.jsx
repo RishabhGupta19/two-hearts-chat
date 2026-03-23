@@ -222,8 +222,8 @@ const Chat = () => {
           )}
         </AnimatePresence>
 
-        {/* FIX 2: Removed <div className="flex-1" /> spacer — messages now start from top */}
-        <div className={`flex-1 overflow-y-auto p-4 flex flex-col gap-2 ${isVent ? 'angry-breathing' : ''}`}>
+        <div className={`flex-1 overflow-y-auto p-4 flex flex-col ${isVent ? 'angry-breathing' : ''}`}>
+          <div className="flex-1" />
           {showNotLinkedMessage ? (
             <div className="flex items-center justify-center h-full">
               <motion.div
