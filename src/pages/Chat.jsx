@@ -26,7 +26,10 @@ const Chat = () => {
   const [goalText, setGoalText] = useState('');
   const [selectedTag, setSelectedTag] = useState('us');
   const [showResolution, setShowResolution] = useState(false);
-  const [showBanner, setShowBanner] = useState(true);
+  const [showBanner, setShowBanner] = useState(() => {
+    const seen = localStorage.getItem('solace_vent_banner_seen');
+    return !seen;
+  });
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [pendingMode, setPendingMode] = useState(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
@@ -140,7 +143,7 @@ const Chat = () => {
       setInput('');
       setGoalText('');
       setShowGoalInput(false);
-      if (pendingMode === 'vent') setShowBanner(true);
+      if (pendingMode === 'vent' && !localStorage.getItem('solace_vent_banner_seen')) setShowBanner(true);
     }
     setShowModeConfirm(false);
     setPendingMode(null);
@@ -155,7 +158,7 @@ const Chat = () => {
         {/* Top bar */}
         <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
           <div className="flex items-center gap-2 min-w-0 shrink-0">
-            <button onClick={() => navigate('/dashboard')} className="text-muted-foreground hover:text-foreground text-sm min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer active:opacity-70 relative z-10">
+            <button onClick={() => navigate('/dashboard')} className="text-muted-foreground hover:text-foreground text-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer active:opacity-70 relative z-10">
               ←
             </button>
             {isCalm && (
@@ -197,7 +200,7 @@ const Chat = () => {
               <span className="text-xs font-body text-foreground">
                 This is your safe space. Say what you feel. 
               </span>
-              <button onClick={() => setShowBanner(false)} className="text-xs text-muted-foreground hover:text-foreground">
+              <button onClick={() => { setShowBanner(false); localStorage.setItem('solace_vent_banner_seen', 'true'); }} className="text-xs text-muted-foreground hover:text-foreground">
                 ✕
               </button>
             </motion.div>
