@@ -14,20 +14,9 @@ import { toast } from 'sonner';
 import { friendlyError } from '@/utils/errorMessages';
 
 const VENT_BANNER_SEEN_KEY = 'solace_vent_banner_seen';
-
-const getChatSafeAreaPadding = () => {
-  if (typeof window === 'undefined') return {
-    top: '8px',
-    bottom: '8px',
-  };
-
-  const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
-  const isAndroid = /Android/i.test(window.navigator.userAgent);
-
-  return {
-    top: isStandalone && isAndroid ? 'max(env(safe-area-inset-top, 0px), 12px)' : 'env(safe-area-inset-top, 0px)',
-    bottom: isStandalone && isAndroid ? '8px' : 'max(env(safe-area-inset-bottom, 0px), 8px)',
-  };
+const CHAT_SAFE_AREA = {
+  top: 'max(env(safe-area-inset-top, 0px), 8px)',
+  bottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
 };
 
 const shouldShowVentBanner = () => {
@@ -67,7 +56,6 @@ const Chat = () => {
   const isVent = mode === 'vent';
   const isCalm = mode === 'calm';
   const wsEnabled = isCalm && isLinked && !!coupleId;
-  const safeAreaPadding = getChatSafeAreaPadding();
 
   const showGoalConfirmation = useCallback((message) => {
     if (goalConfirmationTimer.current) clearTimeout(goalConfirmationTimer.current);
@@ -177,7 +165,7 @@ const Chat = () => {
 
   return (
     <ModeWrapper>
-      <div className="flex flex-col h-[100dvh] relative" style={{ paddingTop: safeAreaPadding.top }}>
+      <div className="flex h-[100dvh] min-h-0 flex-col relative" style={{ paddingTop: CHAT_SAFE_AREA.top }}>
 
         {/* Header */}
         <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
@@ -223,7 +211,7 @@ const Chat = () => {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between"
+              className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between shrink-0"
             >
               <span className="text-xs font-body text-foreground">
                 This is your safe space. Say what you feel.
@@ -238,7 +226,10 @@ const Chat = () => {
           )}
         </AnimatePresence>
 
-        <div className={`flex-1 overflow-y-auto p-4 flex flex-col ${isVent ? 'angry-breathing' : ''}`}>
+        <div
+          data-pull-scroll
+          className={`flex-1 min-h-0 overflow-y-auto p-4 flex flex-col ${isVent ? 'angry-breathing' : ''}`}
+        >
           <div className="flex-1" />
           {showNotLinkedMessage ? (
             <div className="flex items-center justify-center h-full">
@@ -352,8 +343,8 @@ const Chat = () => {
 
         {!showNotLinkedMessage && (
           <div
-            className="border-t border-border bg-card px-3 pt-3"
-            style={{ paddingBottom: safeAreaPadding.bottom }}
+            className="border-t border-border bg-card px-3 pt-3 shrink-0"
+            style={{ paddingBottom: CHAT_SAFE_AREA.bottom }}
           >
             {isCalm && (
               <button

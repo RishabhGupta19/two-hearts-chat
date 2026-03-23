@@ -2,8 +2,9 @@
 
 export const ModeWrapper = ({ children }) => {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="h-full min-h-0 w-full bg-background text-foreground">
       {children}
-    </div>);
+    </div>
+  );
 
 };
