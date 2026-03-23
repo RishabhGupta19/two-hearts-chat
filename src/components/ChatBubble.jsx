@@ -1,6 +1,16 @@
 import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 
+const formatIST = (timestamp) => {
+  const utcDate = new Date(timestamp + 'Z');
+  return utcDate.toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
 export const ChatBubble = ({ message, index }) => {
   const { user, mode, partnerName } = useApp();
 
@@ -40,10 +50,7 @@ export const ChatBubble = ({ message, index }) => {
         )}
         <p className="leading-relaxed">{message.text}</p>
         <span className="mt-0.5 block text-[9px] opacity-60">
-          {new Date(message.timestamp).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
+          {formatIST(message.timestamp)}
         </span>
       </div>
     </motion.div>
