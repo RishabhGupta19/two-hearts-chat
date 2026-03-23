@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import PullToRefresh from '@/components/PullToRefresh';
+
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
@@ -81,7 +81,6 @@ const Dashboard = () => {
   };
 
   return (
-    <PullToRefresh>
     <div className="min-h-screen bg-background">
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-border">
@@ -357,8 +356,7 @@ const Dashboard = () => {
           Your conversations are private and safe. 🔒
         </motion.p>
       </main>
-    </div>
-    </PullToRefresh>);
+    </div>);
 
 };
 
