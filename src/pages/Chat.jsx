@@ -581,8 +581,7 @@ const Chat = () => {
 
   return (
     <ModeWrapper>
-      {/* FIX 1: Removed paddingTop safe-area from outer div */}
-      <div className="flex flex-col h-[100dvh] relative">
+      <div className="flex flex-col h-[100dvh] relative" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
 
         {/* Header */}
         <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
