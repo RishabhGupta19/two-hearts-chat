@@ -14,10 +14,6 @@ import { toast } from 'sonner';
 import { friendlyError } from '@/utils/errorMessages';
 
 const VENT_BANNER_SEEN_KEY = 'solace_vent_banner_seen';
-const CHAT_SAFE_AREA = {
-  top: 'env(safe-area-inset-top, 0px)',
-  bottom: '0px',
-};
 
 const shouldShowVentBanner = () => {
   if (typeof window === 'undefined') return false;
@@ -165,10 +161,10 @@ const Chat = () => {
 
   return (
     <ModeWrapper>
-      <div className="flex h-[100dvh] min-h-0 flex-col relative" style={{ paddingTop: CHAT_SAFE_AREA.top }}>
+      <div className="flex h-[100dvh] min-h-0 flex-col relative">
 
         {/* Header */}
-        <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
+        <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <div className="flex items-center gap-2 min-w-0 shrink-0">
             <button
               onClick={() => navigate('/dashboard')}
@@ -344,7 +340,6 @@ const Chat = () => {
         {!showNotLinkedMessage && (
           <div
             className="border-t border-border bg-card px-3 pt-1.5 shrink-0"
-            style={{ paddingBottom: CHAT_SAFE_AREA.bottom }}
           >
             {isCalm && (
               <button
