@@ -40,7 +40,7 @@ const Goals = () => {
   const partnerGoals = goals.filter((g) => g.setBy !== userRole);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-[100dvh] bg-background overflow-y-auto flex flex-col">
       <header className="flex items-center justify-between px-6 py-4 mt-[55px] border-b border-border">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/dashboard')} className="text-muted-foreground hover:text-foreground text-sm">
