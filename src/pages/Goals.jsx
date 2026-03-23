@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 import { GoalCard } from '@/components/GoalCard';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, ArrowLeft } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 
 const TAGS = ['Growth', 'Us', 'Personal'];
