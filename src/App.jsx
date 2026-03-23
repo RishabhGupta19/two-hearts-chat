@@ -103,6 +103,7 @@ const App = () => (
       <AppProvider>
         <BrowserRouter>
           <AppRoutes />
+          <IOSInstallBanner />
         </BrowserRouter>
       </AppProvider>
     </TooltipProvider>
