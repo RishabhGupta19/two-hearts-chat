@@ -9,14 +9,14 @@ import { TypingIndicator } from '@/components/TypingIndicator';
 import { ResolutionModal } from '@/components/ResolutionModal';
 import { Input } from '@/components/ui/input';
 import { ModeWrapper } from '@/components/ModeWrapper';
-import { Loader2, Link2Off } from 'lucide-react';
+import { Loader2, Link2Off, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyError } from '@/utils/errorMessages';
 
 const VENT_BANNER_SEEN_KEY = 'solace_vent_banner_seen';
 const CHAT_SAFE_AREA = {
   top: 'max(env(safe-area-inset-top, 0px), 52px)',
-  bottom: 'max(env(safe-area-inset-bottom, 0px), 16px)',
+  bottom: 'max(env(safe-area-inset-bottom, 0px), 6px)',
 };
 
 const shouldShowVentBanner = () => {
@@ -172,9 +172,9 @@ const Chat = () => {
           <div className="flex items-center gap-2 min-w-0 shrink-0">
             <button
               onClick={() => navigate('/dashboard')}
-              className="text-muted-foreground hover:text-foreground min-w-[48px] min-h-[48px] flex items-center justify-center cursor-pointer active:opacity-70 relative z-10 -ml-3"
+              className="text-foreground min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer active:opacity-70 -ml-1"
             >
-              <span className="text-2xl leading-none">←</span>
+              <ArrowLeft size={24} strokeWidth={2.5} />
             </button>
             {isCalm && (
               <>
