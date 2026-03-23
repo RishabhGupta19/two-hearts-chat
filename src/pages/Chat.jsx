@@ -161,10 +161,10 @@ const Chat = () => {
 
   return (
     <ModeWrapper>
-      <div className="flex h-[100dvh] min-h-0 flex-col relative">
+      <div className="min-h-screen bg-background flex flex-col relative">
 
         {/* Header */}
-        <header className="chat-header-safe flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
+        <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
           <div className="flex items-center gap-2 min-w-0 shrink-0">
             <button
               onClick={() => navigate('/dashboard')}
