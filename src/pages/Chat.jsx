@@ -143,7 +143,7 @@ const Chat = () => {
       setInput('');
       setGoalText('');
       setShowGoalInput(false);
-      if (pendingMode === 'vent') setShowBanner(true);
+      if (pendingMode === 'vent' && !localStorage.getItem('solace_vent_banner_seen')) setShowBanner(true);
     }
     setShowModeConfirm(false);
     setPendingMode(null);
