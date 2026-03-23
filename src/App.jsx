@@ -103,9 +103,7 @@ const App = () => (
       <Sonner />
       <AppProvider>
         <BrowserRouter>
-          <PullToRefresh>
             <AppRoutes />
-          </PullToRefresh>
           <IOSInstallBanner />
         </BrowserRouter>
       </AppProvider>
