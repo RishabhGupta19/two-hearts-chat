@@ -164,7 +164,7 @@ const Chat = () => {
       <div className="flex h-[100dvh] min-h-0 flex-col relative">
 
         {/* Header */}
-        <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <header className="chat-header-safe flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
           <div className="flex items-center gap-2 min-w-0 shrink-0">
             <button
               onClick={() => navigate('/dashboard')}

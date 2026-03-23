@@ -4,6 +4,9 @@
 
 @layer base {
   :root {
+    --safe-top: env(safe-area-inset-top, 44px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+
     --background: 36 33% 96.5%;
     --foreground: 0 16% 20.5%;
 
@@ -89,6 +92,7 @@
     height: 100dvh;
     overflow: hidden;
     -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -105,6 +109,12 @@
     height: 100dvh;
     overflow: hidden;
     position: relative;
+  }
+
+  @media (display-mode: standalone) {
+    .chat-header-safe {
+      padding-top: var(--safe-top) !important;
+    }
   }
 
   .fixed-bottom {
