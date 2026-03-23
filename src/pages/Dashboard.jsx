@@ -81,6 +81,7 @@ const Dashboard = () => {
   };
 
   return (
+    <PullToRefresh>
     <div className="min-h-screen bg-background">
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-border">
