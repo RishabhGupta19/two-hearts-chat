@@ -27,7 +27,7 @@ export const ChatBubble = ({ message, index }) => {
       className={`mb-3 flex w-full ${isMine ? 'justify-end pr-1' : 'justify-start pl-1'}`}
     >
       <div
-        className={`max-w-[75%] rounded-2xl px-3 py-2 text-[13px] font-body ${
+        className={`max-w-[72%] rounded-2xl px-3 py-2 text-[13px] font-body break-words ${
           isMine
             ? 'bg-primary text-primary-foreground rounded-br-sm'
             : isAI

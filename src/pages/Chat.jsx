@@ -318,7 +318,7 @@ const Chat = () => {
 
         {/* Input bar */}
         {!showNotLinkedMessage && (
-          <div className="border-t border-border bg-card px-4 py-3">
+          <div className="border-t border-border bg-card px-3 py-3 fixed-bottom">
             {isCalm && (
               <button
                 onClick={() => setShowGoalInput(!showGoalInput)}
@@ -327,20 +327,20 @@ const Chat = () => {
                 {showGoalInput ? '− Hide goal setter' : '+ Set a Goal for Today'}
               </button>
             )}
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <Input
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                 placeholder={isVent ? "What's on your mind? Let it out..." : `Message ${partnerName || 'your partner'}...`}
-                className="rounded-[12px] text-sm flex-1"
+                className="rounded-[12px] text-sm flex-1 min-w-0"
                 disabled={sending || (isCalm && !connected)}
               />
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 onClick={handleSend}
                 disabled={sending || (isCalm && !connected)}
-                className="rounded-pill bg-primary px-5 text-sm text-primary-foreground font-medium shadow-soft hover:bg-primary/90 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                className="rounded-pill bg-primary px-4 py-2 text-sm text-primary-foreground font-medium shadow-soft hover:bg-primary/90 transition-colors flex items-center justify-center shrink-0 disabled:opacity-50"
               >
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
               </motion.button>
