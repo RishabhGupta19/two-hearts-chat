@@ -41,7 +41,7 @@ const Goals = () => {
 
   return (
     <div className="h-[100dvh] bg-background overflow-y-auto flex flex-col">
-      <header className="flex items-center justify-between px-6 py-4 mt-[55px] border-b border-border">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-border">
         <div className="flex items-center gap-2 min-w-0 shrink-0">
           <button
             onClick={() => navigate('/dashboard')}
