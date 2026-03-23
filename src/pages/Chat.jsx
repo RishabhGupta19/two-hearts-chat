@@ -9,7 +9,7 @@ import { TypingIndicator } from '@/components/TypingIndicator';
 import { ResolutionModal } from '@/components/ResolutionModal';
 import { Input } from '@/components/ui/input';
 import { ModeWrapper } from '@/components/ModeWrapper';
-import { Loader2, Link2Off } from 'lucide-react';
+import { Loader2, Link2Off, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyError } from '@/utils/errorMessages';
 
