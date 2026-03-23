@@ -172,9 +172,9 @@ const Chat = () => {
           <div className="flex items-center gap-2 min-w-0 shrink-0">
             <button
               onClick={() => navigate('/dashboard')}
-              className="text-muted-foreground hover:text-foreground text-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer active:opacity-70 relative z-10"
+              className="text-muted-foreground hover:text-foreground min-w-[48px] min-h-[48px] flex items-center justify-center cursor-pointer active:opacity-70 relative z-10 -ml-3"
             >
-              ←
+              <span className="text-2xl leading-none">←</span>
             </button>
             {isCalm && (
               <>
