@@ -13,6 +13,20 @@ import { Loader2, Link2Off } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyError } from '@/utils/errorMessages';
 
+const VENT_BANNER_SEEN_KEY = 'solace_vent_banner_seen';
+
+const shouldShowVentBanner = () => {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    if (sessionStorage.getItem(VENT_BANNER_SEEN_KEY)) return false;
+    sessionStorage.setItem(VENT_BANNER_SEEN_KEY, 'true');
+    return true;
+  } catch {
+    return true;
+  }
+};
+
 const Chat = () => {
   const {
     mode, setMode, currentMessages, sendMessage, fetchMessages,
@@ -26,10 +40,7 @@ const Chat = () => {
   const [goalText, setGoalText] = useState('');
   const [selectedTag, setSelectedTag] = useState('us');
   const [showResolution, setShowResolution] = useState(false);
-  const [showBanner, setShowBanner] = useState(() => {
-    const seen = localStorage.getItem('solace_vent_banner_seen');
-    return !seen;
-  });
+  const [showBanner, setShowBanner] = useState(() => (mode === 'vent' ? shouldShowVentBanner() : false));
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [pendingMode, setPendingMode] = useState(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
@@ -143,7 +154,9 @@ const Chat = () => {
       setInput('');
       setGoalText('');
       setShowGoalInput(false);
-      if (pendingMode === 'vent' && !localStorage.getItem('solace_vent_banner_seen')) setShowBanner(true);
+      if (pendingMode === 'vent') {
+        setShowBanner(shouldShowVentBanner());
+      }
     }
     setShowModeConfirm(false);
     setPendingMode(null);
@@ -198,9 +211,9 @@ const Chat = () => {
               className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between"
             >
               <span className="text-xs font-body text-foreground">
-                This is your safe space. Say what you feel. 
+                This is your safe space. Say what you feel.
               </span>
-              <button onClick={() => { setShowBanner(false); localStorage.setItem('solace_vent_banner_seen', 'true'); }} className="text-xs text-muted-foreground hover:text-foreground">
+              <button onClick={() => setShowBanner(false)} className="text-xs text-muted-foreground hover:text-foreground">
                 ✕
               </button>
             </motion.div>
@@ -321,7 +334,7 @@ const Chat = () => {
 
         {/* Input bar */}
         {!showNotLinkedMessage && (
-          <div className="border-t border-border bg-card px-3 py-3" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
+          <div className="border-t border-border bg-card px-3 pt-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)' }}>
             {isCalm && (
               <button
                 onClick={() => setShowGoalInput(!showGoalInput)}
