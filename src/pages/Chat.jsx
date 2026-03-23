@@ -67,6 +67,7 @@ const Chat = () => {
   const isVent = mode === 'vent';
   const isCalm = mode === 'calm';
   const wsEnabled = isCalm && isLinked && !!coupleId;
+  const safeAreaPadding = getChatSafeAreaPadding();
 
   const showGoalConfirmation = useCallback((message) => {
     if (goalConfirmationTimer.current) clearTimeout(goalConfirmationTimer.current);
