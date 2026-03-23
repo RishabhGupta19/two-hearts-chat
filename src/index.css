@@ -111,6 +111,12 @@
     position: relative;
   }
 
+  @media (display-mode: standalone) {
+    .chat-header-safe {
+      padding-top: var(--safe-top) !important;
+    }
+  }
+
   .fixed-bottom {
     padding-bottom: env(safe-area-inset-bottom);
   }
