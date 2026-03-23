@@ -24,10 +24,10 @@ export const ChatBubble = ({ message, index }) => {
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.05 }}
-      className={`mb-3 flex w-full ${isMine ? 'justify-end' : 'justify-start'}`}
+      className={`mb-3 flex w-full ${isMine ? 'justify-end pr-1' : 'justify-start pl-1'}`}
     >
       <div
-        className={`max-w-[75%] rounded-2xl px-3 py-2 text-[13px] font-body ${
+        className={`max-w-[72%] rounded-2xl px-3 py-2 text-[13px] font-body break-words ${
           isMine
             ? 'bg-primary text-primary-foreground rounded-br-sm'
             : isAI
