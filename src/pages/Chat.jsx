@@ -226,7 +226,10 @@ const Chat = () => {
           )}
         </AnimatePresence>
 
-        <div className={`flex-1 overflow-y-auto p-4 flex flex-col ${isVent ? 'angry-breathing' : ''}`}>
+        <div
+          data-pull-scroll
+          className={`flex-1 min-h-0 overflow-y-auto p-4 flex flex-col ${isVent ? 'angry-breathing' : ''}`}
+        >
           <div className="flex-1" />
           {showNotLinkedMessage ? (
             <div className="flex items-center justify-center h-full">
