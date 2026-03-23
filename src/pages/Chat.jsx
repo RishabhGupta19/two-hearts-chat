@@ -228,7 +228,7 @@ const Chat = () => {
 
         <div
           data-pull-scroll
-          className={`flex-1 min-h-0 overflow-y-auto p-4 flex flex-col ${isVent ? 'angry-breathing' : ''}`}
+          className={`flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-1.5 flex flex-col ${isVent ? 'angry-breathing' : ''}`}
         >
           <div className="flex-1" />
           {showNotLinkedMessage ? (
@@ -343,7 +343,7 @@ const Chat = () => {
 
         {!showNotLinkedMessage && (
           <div
-            className="border-t border-border bg-card px-3 pt-3 shrink-0"
+            className="border-t border-border bg-card px-3 pt-1.5 shrink-0"
             style={{ paddingBottom: CHAT_SAFE_AREA.bottom }}
           >
             {isCalm && (
