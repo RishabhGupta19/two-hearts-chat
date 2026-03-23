@@ -174,7 +174,7 @@ const Chat = () => {
               onClick={() => navigate('/dashboard')}
               className="text-foreground min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer active:opacity-70 -ml-1"
             >
-              <ArrowLeft size={24} strokeWidth={2.5} />
+              <ArrowLeft size={22} strokeWidth={1.8} />
             </button>
             {isCalm && (
               <>
