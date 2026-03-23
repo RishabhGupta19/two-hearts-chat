@@ -357,7 +357,8 @@ const Dashboard = () => {
           Your conversations are private and safe. 🔒
         </motion.p>
       </main>
-    </div>);
+    </div>
+    </PullToRefresh>);
 
 };
 
