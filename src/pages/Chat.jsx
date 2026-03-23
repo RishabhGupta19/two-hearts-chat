@@ -286,7 +286,7 @@ const Chat = () => {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="border-t border-border bg-card px-4"
+              className="border-t border-border bg-card px-4 py-3"
             >
               <p className="text-xs font-medium text-foreground font-body mb-2">
                 Set a goal for {partnerName || 'Partner'} to see
