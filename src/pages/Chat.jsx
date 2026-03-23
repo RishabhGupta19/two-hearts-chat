@@ -754,11 +754,10 @@ const Chat = () => {
           )}
         </AnimatePresence>
 
-        {/* FIX 3: Removed "+ 8px" from paddingBottom — only safe-area inset, no hardcoded extra gap */}
         {!showNotLinkedMessage && (
           <div
-            className="border-t border-border bg-card px-3 pt-3"
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+            className="border-t border-border bg-card px-3 pt-3 pb-3"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}
           >
             {isCalm && (
               <button
