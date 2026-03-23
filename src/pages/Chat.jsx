@@ -285,7 +285,7 @@ const Chat = () => {
               className="border-t border-border bg-card px-4 py-3"
             >
               <p className="text-xs font-medium text-foreground font-body mb-2">
-                Set a goal for {partnerName || 'Partner'} to see
+                Set a goals for {partnerName || 'Partner'} to see
               </p>
               <div className="flex gap-2 mb-2">
                 {[['growth', '💪'], ['us', '❤️'], ['personal', '🌱']].map(([tag, emoji]) => (
