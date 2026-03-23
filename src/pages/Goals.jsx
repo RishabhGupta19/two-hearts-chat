@@ -42,9 +42,12 @@ const Goals = () => {
   return (
     <div className="h-[100dvh] bg-background overflow-y-auto flex flex-col">
       <header className="flex items-center justify-between px-6 py-4 mt-[55px] border-b border-border">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/dashboard')} className="text-muted-foreground hover:text-foreground text-sm">
-            ←
+        <div className="flex items-center gap-2 min-w-0 shrink-0">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="text-foreground min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer active:opacity-70 -ml-1"
+          >
+            <ArrowLeft size={22} strokeWidth={1.8} />
           </button>
           <h1 className="font-heading text-lg font-bold text-foreground">Goals</h1>
         </div>
