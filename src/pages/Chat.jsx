@@ -15,6 +15,21 @@ import { friendlyError } from '@/utils/errorMessages';
 
 const VENT_BANNER_SEEN_KEY = 'solace_vent_banner_seen';
 
+const getChatSafeAreaPadding = () => {
+  if (typeof window === 'undefined') return {
+    top: '8px',
+    bottom: '8px',
+  };
+
+  const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const isAndroid = /Android/i.test(window.navigator.userAgent);
+
+  return {
+    top: isStandalone && isAndroid ? 'max(env(safe-area-inset-top, 0px), 12px)' : 'env(safe-area-inset-top, 0px)',
+    bottom: isStandalone && isAndroid ? '8px' : 'max(env(safe-area-inset-bottom, 0px), 8px)',
+  };
+};
+
 const shouldShowVentBanner = () => {
   if (typeof window === 'undefined') return false;
   try {
