@@ -318,7 +318,7 @@ const Chat = () => {
 
         {/* Input bar */}
         {!showNotLinkedMessage && (
-          <div className="border-t border-border bg-card px-3 py-4" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }}>
+          <div className="border-t border-border bg-card px-3 py-3" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             {isCalm && (
               <button
                 onClick={() => setShowGoalInput(!showGoalInput)}
