@@ -26,7 +26,10 @@ const Chat = () => {
   const [goalText, setGoalText] = useState('');
   const [selectedTag, setSelectedTag] = useState('us');
   const [showResolution, setShowResolution] = useState(false);
-  const [showBanner, setShowBanner] = useState(true);
+  const [showBanner, setShowBanner] = useState(() => {
+    const seen = localStorage.getItem('solace_vent_banner_seen');
+    return !seen;
+  });
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [pendingMode, setPendingMode] = useState(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
