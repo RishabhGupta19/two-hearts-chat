@@ -14,10 +14,6 @@ import { toast } from 'sonner';
 import { friendlyError } from '@/utils/errorMessages';
 
 const VENT_BANNER_SEEN_KEY = 'solace_vent_banner_seen';
-const CHAT_SAFE_AREA = {
-  top: 'env(safe-area-inset-top, 0px)',
-  bottom: '0px',
-};
 
 const shouldShowVentBanner = () => {
   if (typeof window === 'undefined') return false;
