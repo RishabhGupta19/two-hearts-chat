@@ -200,7 +200,7 @@ const Chat = () => {
               <span className="text-xs font-body text-foreground">
                 This is your safe space. Say what you feel. 
               </span>
-              <button onClick={() => setShowBanner(false)} className="text-xs text-muted-foreground hover:text-foreground">
+              <button onClick={() => { setShowBanner(false); localStorage.setItem('solace_vent_banner_seen', 'true'); }} className="text-xs text-muted-foreground hover:text-foreground">
                 ✕
               </button>
             </motion.div>
