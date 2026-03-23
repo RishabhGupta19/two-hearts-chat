@@ -15,6 +15,7 @@ import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
 import Goals from "./pages/Goals";
 import NotFound from "./pages/NotFound";
+import IOSInstallBanner from "@/components/IOSInstallBanner";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
