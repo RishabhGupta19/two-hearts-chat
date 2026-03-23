@@ -16,7 +16,7 @@ import { friendlyError } from '@/utils/errorMessages';
 const VENT_BANNER_SEEN_KEY = 'solace_vent_banner_seen';
 const CHAT_SAFE_AREA = {
   top: 'max(env(safe-area-inset-top, 0px), 52px)',
-  bottom: 'env(safe-area-inset-bottom, 2px)',
+  bottom: '0px',
 };
 
 const shouldShowVentBanner = () => {
