@@ -211,7 +211,7 @@ const Chat = () => {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between"
+              className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between shrink-0"
             >
               <span className="text-xs font-body text-foreground">
                 This is your safe space. Say what you feel.
