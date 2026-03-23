@@ -41,7 +41,7 @@ const Goals = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border">
+      <header className="flex items-center justify-between px-6 py-4 mt-[55px] border-b border-border">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/dashboard')} className="text-muted-foreground hover:text-foreground text-sm">
             ←
