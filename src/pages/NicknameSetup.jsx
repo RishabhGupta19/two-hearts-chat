@@ -33,8 +33,19 @@ const NicknameSetup = () => {
     }
   };
 
-  const handleSkip = () => {
-    navigate('/partner-linking');
+  const handleSkip = async () => {
+    setSaving(true);
+    try {
+      const fallback = userName || 'Friend';
+      await api.put('/auth/profile', { nickname: fallback });
+      setNickname(fallback);
+      navigate('/partner-linking');
+    } catch (err) {
+      console.error('Failed to skip nickname:', err);
+      setError('Could not save — please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
