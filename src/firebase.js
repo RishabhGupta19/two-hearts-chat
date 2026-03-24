@@ -2,12 +2,12 @@ import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCh16O9yRk67y2xkt-wMYqfbXgiZmgtOzQ",
+  apiKey: "AIzaSyDvc_-aH6XEUuoU-HtXUX_IU1-i5MMgwl4",
   authDomain: "us-two-2cd86.firebaseapp.com",
   projectId: "us-two-2cd86",
   storageBucket: "us-two-2cd86.firebasestorage.app",
   messagingSenderId: "234836871171",
-  appId: "1:234876871171:web:48d7864696f537fda2e636",
+  appId: "1:234836871171:web:48d7864696f537fda2e636",
   measurementId: "G-XFHP2Z4KKT",
 };
 
