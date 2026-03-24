@@ -40,8 +40,8 @@ const Goals = () => {
   const partnerGoals = goals.filter((g) => g.setBy !== userRole);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/dashboard')} className="text-muted-foreground hover:text-foreground text-sm">
             ←
@@ -57,7 +57,7 @@ const Goals = () => {
         </button>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-8">
+      <main className="flex-1 overflow-y-auto max-w-2xl mx-auto px-4 py-8 w-full">
         <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <h2 className="font-heading text-lg font-semibold text-foreground mb-4">
             {partnerName || 'Partner'}'s Goals for You

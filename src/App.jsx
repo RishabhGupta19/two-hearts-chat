@@ -14,6 +14,7 @@ import PartnerLinking from "./pages/PartnerLinking";
 import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
 import Goals from "./pages/Goals";
+import Gallery from "./pages/Gallery";
 import NotFound from "./pages/NotFound";
 import IOSInstallBanner from "@/components/IOSInstallBanner";
 import { Loader2 } from "lucide-react";
@@ -90,6 +91,7 @@ const AppRoutes = () => {
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/chat" element={<Chat />} />
       <Route path="/goals" element={<Goals />} />
+      <Route path="/gallery" element={<Gallery />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

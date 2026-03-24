@@ -80,9 +80,9 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       {/* Top bar */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
         <h1 className="font-heading text-xl font-bold text-foreground">Solace</h1>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -98,8 +98,8 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="max-w-2xl mx-auto px-4 py-12">
+      {/* Main content - scrollable */}
+      <main className="flex-1 overflow-y-auto max-w-2xl mx-auto w-full px-4 py-12">
         {/* Connection status */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -315,7 +315,7 @@ const Dashboard = () => {
       </AnimatePresence>
 
         {/* CTA Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <motion.button
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -343,6 +343,20 @@ const Dashboard = () => {
             <h3 className="font-heading text-lg font-semibold text-foreground mb-1">View Goals</h3>
             <p className="text-xs text-muted-foreground font-body">Track your relationship goals</p>
           </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => navigate('/gallery')}
+            className="rounded-lg border bg-card p-8 shadow-soft text-center hover:shadow-warm transition-shadow">
+            
+            <span className="text-4xl block mb-3">📸</span>
+            <h3 className="font-heading text-lg font-semibold text-foreground mb-1">Gallery</h3>
+            <p className="text-xs text-muted-foreground font-body">Share your memories</p>
+          </motion.button>
         </div>
 
         {/* Footer */}
@@ -355,8 +369,8 @@ const Dashboard = () => {
           Your conversations are private and safe. 🔒
         </motion.p>
       </main>
-    </div>);
-
+    </div>
+  );
 };
 
 export default Dashboard;
