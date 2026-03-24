@@ -12,6 +12,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+console.log("FIREBASE CONFIG:", firebaseConfig);
 export const messaging = getMessaging(app);
 
 export const requestNotificationPermission = async (api) => {
