@@ -23,8 +23,8 @@ const defaultState = {
   isLinked: false,
   assessmentCompleted: false,
   assessmentProfile: null,
-  userProfilePic: null,
-  partnerProfilePic: null,
+  userProfilePic: localStorage.getItem('userProfilePic') || null,
+  partnerProfilePic: localStorage.getItem('partnerProfilePic') || null,
   mode: localStorage.getItem('chat_mode') || 'calm',
   messages: [],
   goals: [],
@@ -98,6 +98,13 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const syncUserState = (user) => {
+    const userProfilePic = user.profile_pic_url !== undefined ? user.profile_pic_url : null;
+    const partnerProfilePic = user.partner_profile_pic_url !== undefined ? user.partner_profile_pic_url : null;
+    
+    // Save profile pics to localStorage for persistence
+    if (userProfilePic) localStorage.setItem('userProfilePic', userProfilePic);
+    if (partnerProfilePic) localStorage.setItem('partnerProfilePic', partnerProfilePic);
+    
     setState((s) => ({
       ...s,
       isAuthenticated: true,
@@ -111,9 +118,9 @@ export const AppProvider = ({ children }) => {
       isLinked: user.is_linked || false,
       assessmentCompleted: user.assessment_completed || false,
       assessmentProfile: user.assessment_profile || null,
-      // Only update profile pic if the backend explicitly provides it, otherwise keep existing
-      userProfilePic: user.profile_pic_url !== undefined ? user.profile_pic_url : s.userProfilePic,
-      partnerProfilePic: user.partner_profile_pic_url !== undefined ? user.partner_profile_pic_url : s.partnerProfilePic,
+      // Use from backend if available, otherwise fall back to localStorage
+      userProfilePic: userProfilePic || s.userProfilePic || localStorage.getItem('userProfilePic'),
+      partnerProfilePic: partnerProfilePic || s.partnerProfilePic || localStorage.getItem('partnerProfilePic'),
       loading: false,
     }));
   };
@@ -211,6 +218,9 @@ export const AppProvider = ({ children }) => {
       const imageUrl = urlData.publicUrl;
       console.log('Generated public URL:', imageUrl);
 
+      // Save to localStorage for persistence
+      localStorage.setItem('userProfilePic', imageUrl);
+
       // Update state immediately with the new profile picture
       setState((s) => {
         console.log('Updating state with userProfilePic:', imageUrl);
@@ -244,6 +254,9 @@ export const AppProvider = ({ children }) => {
 
   const removeProfilePic = useCallback(async () => {
     try {
+      // Remove from localStorage
+      localStorage.removeItem('userProfilePic');
+      
       // Update state immediately
       setState((s) => ({
         ...s,
