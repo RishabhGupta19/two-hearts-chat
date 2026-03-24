@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import api from '@/api';
+import { supabase } from '@/integrations/supabase/supabaseClient';
 import { requestNotificationPermission } from '@/firebase';
 
 const AppContext = createContext(null);
@@ -22,6 +23,8 @@ const defaultState = {
   isLinked: false,
   assessmentCompleted: false,
   assessmentProfile: null,
+  userProfilePic: null,
+  partnerProfilePic: null,
   mode: localStorage.getItem('chat_mode') || 'calm',
   messages: [],
   goals: [],
@@ -108,6 +111,9 @@ export const AppProvider = ({ children }) => {
       isLinked: user.is_linked || false,
       assessmentCompleted: user.assessment_completed || false,
       assessmentProfile: user.assessment_profile || null,
+      // Only update profile pic if the backend explicitly provides it, otherwise keep existing
+      userProfilePic: user.profile_pic_url !== undefined ? user.profile_pic_url : s.userProfilePic,
+      partnerProfilePic: user.partner_profile_pic_url !== undefined ? user.partner_profile_pic_url : s.partnerProfilePic,
       loading: false,
     }));
   };
@@ -173,6 +179,93 @@ export const AppProvider = ({ children }) => {
 
   const setNickname = useCallback((nickname) => {
     setState((s) => ({ ...s, nickname }));
+  }, []);
+
+  const updateProfilePic = useCallback(async (file) => {
+    try {
+      // Generate unique filename
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substr(2, 9);
+      const fileName = `${timestamp}-${random}-${file.name}`;
+      const filePath = `profile_pics/${state.user?.id || 'unknown'}/${fileName}`;
+
+      console.log('Uploading profile pic to:', filePath);
+
+      // Upload to Supabase Storage
+      const { data, error: uploadError } = await supabase.storage
+        .from('gallery')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('Upload successful:', data);
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('gallery')
+        .getPublicUrl(filePath);
+
+      const imageUrl = urlData.publicUrl;
+      console.log('Generated public URL:', imageUrl);
+
+      // Update state immediately with the new profile picture
+      setState((s) => {
+        console.log('Updating state with userProfilePic:', imageUrl);
+        return {
+          ...s,
+          userProfilePic: imageUrl,
+        };
+      });
+
+      // Save profile pic URL to backend (fire and forget - best effort)
+      try {
+        const { data: profileData } = await api.put('/auth/profile', {
+          profile_pic_url: imageUrl,
+        });
+        console.log('Backend response:', profileData);
+        // If backend returns updated user, sync it
+        if (profileData?.user || profileData?.profile_pic_url) {
+          console.log('Syncing user state from backend response');
+          syncUserState(profileData.user || profileData);
+        }
+      } catch (backendErr) {
+        console.warn('Backend profile update failed, but image uploaded:', backendErr);
+      }
+
+      return imageUrl;
+    } catch (err) {
+      console.error('Failed to update profile pic:', err);
+      throw err;
+    }
+  }, [state.user?.id]);
+
+  const removeProfilePic = useCallback(async () => {
+    try {
+      // Update state immediately
+      setState((s) => ({
+        ...s,
+        userProfilePic: null,
+      }));
+
+      // Remove from backend (fire and forget - best effort)
+      try {
+        const { data: profileData } = await api.put('/auth/profile', {
+          profile_pic_url: null,
+        });
+        // If backend returns updated user, sync it
+        if (profileData?.user || profileData?.profile_pic_url !== undefined) {
+          syncUserState(profileData.user || profileData);
+        }
+      } catch (backendErr) {
+        console.warn('Backend profile update failed, but locally removed:', backendErr);
+      }
+    } catch (err) {
+      console.error('Failed to remove profile pic:', err);
+      throw err;
+    }
   }, []);
 
   const setMode = useCallback((mode) => {
@@ -330,6 +423,8 @@ export const AppProvider = ({ children }) => {
         linkPartner,
         completeAssessment,
         setNickname,
+        updateProfilePic,
+        removeProfilePic,
         setMode,
         sendMessage,
         fetchMessages,

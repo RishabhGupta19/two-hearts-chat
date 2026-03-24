@@ -30,7 +30,7 @@ const Chat = () => {
   const {
     mode, setMode, currentMessages, sendMessage, fetchMessages,
     partnerName, addGoal, resolveVent, isLinked, coupleId,
-    userName, userRole, user, addWsMessage,
+    userName, userRole, user, addWsMessage, userProfilePic, partnerProfilePic,
   } = useApp();
   const resolvedRole = userRole || user?.role || '';
   const [input, setInput] = useState('');
@@ -174,9 +174,17 @@ const Chat = () => {
             </button>
             {isCalm && (
               <>
-                <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
-                  {(partnerName || 'P').charAt(0)}
-                </div>
+                {partnerProfilePic ? (
+                  <img
+                    src={partnerProfilePic}
+                    alt={partnerName || 'Partner'}
+                    className="h-6 w-6 rounded-full object-cover shrink-0"
+                  />
+                ) : (
+                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
+                    {(partnerName || 'P').charAt(0)}
+                  </div>
+                )}
                 <span className="text-xs font-body font-medium text-foreground truncate">
                   {partnerName || 'Partner'}
                 </span>
@@ -209,7 +217,7 @@ const Chat = () => {
               exit={{ opacity: 0, height: 0 }}
               className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between shrink-0"
             >
-             
+              <p className="text-xs text-muted-foreground">Let it out. This is your safe space.</p>
               <button
                 onClick={() => setShowBanner(false)}
                 className="text-xs text-muted-foreground hover:text-foreground"
