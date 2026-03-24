@@ -301,8 +301,8 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
                 onClick={isEditing ? handleSaveNote : () => setIsEditing(true)}
                 disabled={isSaving && isEditing}
                 style={{
-                  backgroundImage: 'linear-gradient(to right, #d4a878, #6b5344)',
-                  boxShadow: '0 4px 15px rgba(212, 168, 120, 0.4)',
+                  backgroundImage: 'linear-gradient(to right, #e8c499, #9d7d52)',
+                  boxShadow: '0 4px 15px rgba(232, 196, 153, 0.4)',
                   height: '42px',
                   borderRadius: '14px',
                   transition: 'all 0.2s ease',

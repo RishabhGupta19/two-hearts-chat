@@ -161,7 +161,7 @@ const Chat = () => {
 
   return (
     <ModeWrapper>
-      <div className="min-h-screen bg-background flex flex-col relative">
+      <div className="h-[100dvh] bg-background flex flex-col relative">
 
         {/* Header */}
         <header className="sticky top-0 flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
