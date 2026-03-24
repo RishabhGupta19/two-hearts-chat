@@ -91,7 +91,7 @@ const Dashboard = () => {
               {userName.charAt(0).toUpperCase()}
             </div>
             <span className="text-sm font-body text-foreground hidden sm:block">{userName}</span>
-            <div className="h-2 w-2 rounded-full bg-primary" title="Online" />
+
           </div>
           <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground font-body">
             Logout
@@ -365,7 +365,7 @@ const Dashboard = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
-          className="text-center text-xs text-muted-foreground font-body mt-12">
+          className="text-center text-xs text-muted-foreground font-body mt-16">
           
           Your conversations are private and safe. 🔒
         </motion.p>
