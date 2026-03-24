@@ -98,8 +98,8 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const syncUserState = (user) => {
-    const userProfilePic = user.profile_pic_url !== undefined ? user.profile_pic_url : null;
-    const partnerProfilePic = user.partner_profile_pic_url !== undefined ? user.partner_profile_pic_url : null;
+    const userProfilePic = user.profile_picture_url !== undefined ? user.profile_picture_url : null;
+    const partnerProfilePic = user.partner_profile_picture_url !== undefined ? user.partner_profile_picture_url : null;
     
     // Save profile pics to localStorage for persistence
     if (userProfilePic) localStorage.setItem('userProfilePic', userProfilePic);
