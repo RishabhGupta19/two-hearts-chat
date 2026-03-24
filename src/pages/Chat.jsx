@@ -158,7 +158,7 @@ const Chat = () => {
   };
 
   const showNotLinkedMessage = isCalm && !isLinked;
-
+console.log("profile branch working");
   return (
     <ModeWrapper>
       <div className="h-[100dvh] bg-background flex flex-col relative">
