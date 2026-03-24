@@ -190,6 +190,24 @@ const Chat = () => {
                 </span>
               </>
             )}
+            {isVent && (
+              <>
+                {userProfilePic ? (
+                  <img
+                    src={userProfilePic}
+                    alt={userName || 'You'}
+                    className="h-6 w-6 rounded-full object-cover shrink-0"
+                  />
+                ) : (
+                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
+                    {(userName || 'Y').charAt(0)}
+                  </div>
+                )}
+                <span className="text-xs font-body font-medium text-foreground truncate">
+                  {userName || 'You'}
+                </span>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
