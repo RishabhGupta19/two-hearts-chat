@@ -17,6 +17,7 @@ import Goals from "./pages/Goals";
 import Gallery from "./pages/Gallery";
 import NotFound from "./pages/NotFound";
 import IOSInstallBanner from "@/components/IOSInstallBanner";
+
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -104,7 +105,7 @@ const App = () => (
       <Sonner />
       <AppProvider>
         <BrowserRouter>
-          <AppRoutes />
+            <AppRoutes />
           <IOSInstallBanner />
         </BrowserRouter>
       </AppProvider>

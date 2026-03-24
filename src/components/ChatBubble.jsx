@@ -40,10 +40,12 @@ export const ChatBubble = ({ message, index }) => {
         )}
         <p className="leading-relaxed">{message.text}</p>
         <span className="mt-0.5 block text-[9px] opacity-60">
-          {new Date(message.timestamp).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
+          {new Date(message.timestamp + (message.timestamp.endsWith('Z') || message.timestamp.includes('+') ? '' : 'Z')).toLocaleTimeString('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: true,
+})}
         </span>
       </div>
     </motion.div>

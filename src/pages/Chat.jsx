@@ -9,9 +9,22 @@ import { TypingIndicator } from '@/components/TypingIndicator';
 import { ResolutionModal } from '@/components/ResolutionModal';
 import { Input } from '@/components/ui/input';
 import { ModeWrapper } from '@/components/ModeWrapper';
-import { Loader2, Link2Off } from 'lucide-react';
+import { Loader2, Link2Off, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyError } from '@/utils/errorMessages';
+
+const VENT_BANNER_SEEN_KEY = 'solace_vent_banner_seen';
+
+const shouldShowVentBanner = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (sessionStorage.getItem(VENT_BANNER_SEEN_KEY)) return false;
+    sessionStorage.setItem(VENT_BANNER_SEEN_KEY, 'true');
+    return true;
+  } catch {
+    return true;
+  }
+};
 
 const Chat = () => {
   const {
@@ -26,7 +39,7 @@ const Chat = () => {
   const [goalText, setGoalText] = useState('');
   const [selectedTag, setSelectedTag] = useState('us');
   const [showResolution, setShowResolution] = useState(false);
-  const [showBanner, setShowBanner] = useState(true);
+  const [showBanner, setShowBanner] = useState(() => (mode === 'vent' ? shouldShowVentBanner() : false));
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [pendingMode, setPendingMode] = useState(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
@@ -64,7 +77,6 @@ const Chat = () => {
     onTyping: handleWsTyping,
   });
 
-  // Fetch messages when mode changes
   useEffect(() => {
     fetchMessages(mode);
   }, [mode, fetchMessages]);
@@ -78,7 +90,6 @@ const Chat = () => {
     if (goalConfirmationTimer.current) clearTimeout(goalConfirmationTimer.current);
   }, []);
 
-  // Send typing event in calm mode
   const handleInputChange = (e) => {
     setInput(e.target.value);
     if (isCalm && connected) sendTyping();
@@ -90,7 +101,6 @@ const Chat = () => {
     setInput('');
 
     if (isCalm) {
-      // WebSocket send for calm mode
       if (!isLinked) return;
       const sent = wsSend({
         text,
@@ -99,10 +109,9 @@ const Chat = () => {
       });
       if (!sent) {
         toast.error('Not connected. Reconnecting...');
-        setInput(text); // restore input
+        setInput(text);
       }
     } else {
-      // REST API for vent mode
       setSending(true);
       try {
         await sendMessage(text);
@@ -140,33 +149,39 @@ const Chat = () => {
       setInput('');
       setGoalText('');
       setShowGoalInput(false);
-      if (pendingMode === 'vent') setShowBanner(true);
+      if (pendingMode === 'vent') {
+        setShowBanner(shouldShowVentBanner());
+      }
     }
     setShowModeConfirm(false);
     setPendingMode(null);
   };
 
-  // Show "not linked" state for calm mode
   const showNotLinkedMessage = isCalm && !isLinked;
 
   return (
     <ModeWrapper>
-      <div className="flex flex-col h-[100dvh] relative">
-        {/* Top bar */}
-        <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 sticky top-0" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      <div className="min-h-screen bg-background flex flex-col relative">
+
+        {/* Header */}
+        <header className="flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
           <div className="flex items-center gap-2 min-w-0 shrink-0">
-            <button onClick={() => navigate('/dashboard')} className="text-muted-foreground hover:text-foreground text-sm min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer active:opacity-70 relative z-10">
-              ←
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="text-foreground min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer active:opacity-70 -ml-1"
+            >
+              <ArrowLeft size={22} strokeWidth={1.8} />
             </button>
             {isCalm && (
               <>
                 <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
                   {(partnerName || 'P').charAt(0)}
                 </div>
-                <span className="text-xs font-body font-medium text-foreground truncate">{partnerName || 'Partner'}</span>
+                <span className="text-xs font-body font-medium text-foreground truncate">
+                  {partnerName || 'Partner'}
+                </span>
               </>
             )}
-            
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
@@ -192,20 +207,23 @@ const Chat = () => {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between"
+              className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between shrink-0"
             >
-              <span className="text-xs font-body text-foreground">
-                This is your safe space. Say what you feel. 
-              </span>
-              <button onClick={() => setShowBanner(false)} className="text-xs text-muted-foreground hover:text-foreground">
+             
+              <button
+                onClick={() => setShowBanner(false)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
                 ✕
               </button>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Chat area */}
-        <div className={`flex-1 overflow-y-auto p-4 flex flex-col ${isVent ? 'angry-breathing' : ''}`}>
+        <div
+          data-pull-scroll
+          className={`flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-1.5 flex flex-col ${isVent ? 'angry-breathing' : ''}`}
+        >
           <div className="flex-1" />
           {showNotLinkedMessage ? (
             <div className="flex items-center justify-center h-full">
@@ -237,7 +255,6 @@ const Chat = () => {
               {currentMessages.length === 0 && (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
-                 
                     <p className="text-sm text-muted-foreground font-body">
                       {isVent ? "Let it out. We're listening." : 'Start a conversation with your partner'}
                     </p>
@@ -266,7 +283,7 @@ const Chat = () => {
               className="border-t border-border bg-card px-4 py-3"
             >
               <p className="text-xs font-medium text-foreground font-body mb-2">
-                Set a goal for {partnerName || 'Partner'} to see
+                Set a goals for {partnerName || 'Partner'} to see
               </p>
               <div className="flex gap-2 mb-2">
                 {[['growth', '💪'], ['us', '❤️'], ['personal', '🌱']].map(([tag, emoji]) => (
@@ -274,7 +291,9 @@ const Chat = () => {
                     key={tag}
                     onClick={() => setSelectedTag(tag)}
                     className={`rounded-pill px-3 py-1 text-xs font-body border transition-colors ${
-                      selectedTag === tag ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground'
+                      selectedTag === tag
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border text-muted-foreground'
                     }`}
                   >
                     {emoji} {tag.charAt(0).toUpperCase() + tag.slice(1)}
@@ -316,9 +335,11 @@ const Chat = () => {
           )}
         </AnimatePresence>
 
-        {/* Input bar */}
         {!showNotLinkedMessage && (
-          <div className="border-t border-border bg-card px-3 py-3" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div
+            className="border-t border-border bg-card px-3 pt-[6.5px] shrink-0"
+            style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+          >
             {isCalm && (
               <button
                 onClick={() => setShowGoalInput(!showGoalInput)}
@@ -332,7 +353,11 @@ const Chat = () => {
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder={isVent ? "What's on your mind? Let it out..." : `Message ${partnerName || 'your partner'}...`}
+                placeholder={
+                  isVent
+                    ? "What's on your mind? Let it out..."
+                    : `Message ${partnerName || 'your partner'}...`
+                }
                 className="rounded-[12px] text-sm flex-1 min-w-0"
                 disabled={sending || (isCalm && !connected)}
               />
@@ -350,7 +375,7 @@ const Chat = () => {
 
         <ResolutionModal open={showResolution} onClose={() => setShowResolution(false)} />
 
-        {/* Mode switch confirmation */}
+        {/* Mode switch confirmation modal */}
         <AnimatePresence>
           {showModeConfirm && (
             <motion.div

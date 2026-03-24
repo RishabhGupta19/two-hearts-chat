@@ -89,6 +89,7 @@
     height: 100dvh;
     overflow: hidden;
     -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -98,8 +99,6 @@
     overflow: hidden;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
   }
 
   #root {
@@ -162,3 +161,5 @@
   border-radius: 2px;
   animation: confetti-fall 3s ease-out forwards;
 }
+
+/* Android PWA standalone: status bar overlaps content since safe-area-inset-top is 0 */

@@ -111,8 +111,8 @@ const Assessment = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      <header className="px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm">
+    <div className="flex flex-col h-[100dvh] bg-background" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      <header className="px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm flex-shrink-0">
         <h1 className="font-heading text-lg font-semibold text-foreground text-center">Getting to Know You</h1>
         
         <div className="mt-2 flex items-center gap-3">
@@ -132,16 +132,16 @@ const Assessment = () => {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -30 }}
               transition={{ duration: 0.25 }}
-              className="max-w-lg mx-auto"
+              className="max-w-lg mx-auto pb-8"
             >
               <span className="text-xs font-medium text-primary/70 font-body uppercase tracking-wider">
                 {currentQuestion.category?.replace(/([A-Z])/g, ' $1').trim()}
               </span>
-              <h2 className="font-heading text-xl font-semibold text-foreground mt-1 mb-5 leading-snug">
+              <h2 className="font-heading text-xl font-semibold text-foreground mt-1 mb-6 leading-snug">
                 {currentQuestion.question}
               </h2>
 
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {currentQuestion.options?.map((option, idx) => {
                   const isSelected = currentAnswers.includes(option);
                   return (
@@ -149,20 +149,20 @@ const Assessment = () => {
                       key={idx}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => toggleOption(currentQuestion.id, option)}
-                      className={`w-full text-left px-4 py-3.5 rounded-xl border-2 transition-all duration-150 font-body text-sm flex items-center gap-3 ${
+                      className={`w-full text-left px-4 py-4 rounded-xl border-2 transition-all duration-150 font-body text-sm flex items-start gap-3 min-h-[60px] ${
                         isSelected
                           ? 'border-primary bg-primary/10 text-foreground shadow-sm'
                           : 'border-border bg-card text-foreground hover:border-primary/40 hover:bg-card/80'
                       }`}
                     >
                       <span
-                        className={`flex-shrink-0 h-5 w-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+                        className={`flex-shrink-0 h-5 w-5 rounded-md border-2 flex items-center justify-center transition-colors mt-0.5 ${
                           isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/30'
                         }`}
                       >
                         {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-primary-foreground" />}
                       </span>
-                      <span>{option}</span>
+                      <span className="pt-0.5">{option}</span>
                     </motion.button>
                   );
                 })}
@@ -172,13 +172,13 @@ const Assessment = () => {
         </AnimatePresence>
       </div>
 
-      <div className="border-t border-border bg-card px-4 py-3">
-        {error && <p className="text-xs text-destructive mb-2 text-center">{error}</p>}
+      <div className="border-t border-border bg-card px-4 py-4 flex-shrink-0" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+        {error && <p className="text-xs text-destructive mb-3 text-center">{error}</p>}
         <div className="flex gap-3 max-w-lg mx-auto">
-          <Button variant="outline" onClick={handleBack} disabled={currentIndex === 0 || submitting} className="rounded-xl">
+          <Button variant="outline" onClick={handleBack} disabled={currentIndex === 0 || submitting} className="rounded-xl min-h-[48px]">
             <ChevronLeft className="h-4 w-4 mr-1" /> Back
           </Button>
-          <Button onClick={handleNext} disabled={!canProceed || submitting} className="flex-1 rounded-xl">
+          <Button onClick={handleNext} disabled={!canProceed || submitting} className="flex-1 rounded-xl min-h-[48px]">
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing...

@@ -119,6 +119,40 @@ const Gallery = () => {
     }
   };
 
+  const deletePhoto = async (photo) => {
+    if (!confirm('Are you sure you want to delete this image?')) return;
+
+    try {
+      setUploading(true);
+
+      // Delete from storage
+      if (photo.image_url) {
+        const filePath = photo.image_url.split('/').slice(-2).join('/');
+        const { error: storageError } = await supabase.storage
+          .from('gallery')
+          .remove([filePath]);
+
+        if (storageError) console.error('Storage delete error:', storageError);
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('gallery_photos')
+        .delete()
+        .eq('id', photo.id);
+
+      if (dbError) throw dbError;
+
+      toast.success('Image deleted');
+      await fetchPhotos();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      toast.error('Failed to delete image');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div className="h-screen bg-background/80 backdrop-blur-md flex flex-col overflow-hidden" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%), linear-gradient(to bottom, var(--background))' }}>
       {/* Header */}
@@ -175,6 +209,7 @@ const Gallery = () => {
                       setSelectedPhoto(photo);
                       setShowLightbox(true);
                     }}
+                    onDelete={() => deletePhoto(photo)}
                   />
                 ))}
               </div>

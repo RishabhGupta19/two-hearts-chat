@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Trash2 } from 'lucide-react';
 
 // Extract dominant color from image using canvas
 const getDominantColor = (imageUrl, callback) => {
@@ -52,9 +53,10 @@ const getDominantColor = (imageUrl, callback) => {
   img.src = imageUrl;
 };
 
-export default function PhotoTile({ photo, onClick }) {
+export default function PhotoTile({ photo, onClick, onDelete }) {
   const [borderColor, setBorderColor] = useState('rgb(168, 85, 247)'); // default purple
   const [isLoading, setIsLoading] = useState(true);
+  const [showDelete, setShowDelete] = useState(false);
 
   useEffect(() => {
     if (photo && photo.image_url) {
@@ -72,7 +74,9 @@ export default function PhotoTile({ photo, onClick }) {
       whileHover={{ scale: 1.04 }}
       transition={{ type: 'spring', stiffness: 300, damping: 10 }}
       onClick={onClick}
-      className="cursor-pointer"
+      onHoverStart={() => setShowDelete(true)}
+      onHoverEnd={() => setShowDelete(false)}
+      className="cursor-pointer relative"
     >
       <div
         className="aspect-square rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow"
@@ -87,6 +91,22 @@ export default function PhotoTile({ photo, onClick }) {
           className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
           onLoad={() => setIsLoading(false)}
         />
+
+        {/* Delete Button - Appears on Hover */}
+        {onDelete && (
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: showDelete ? 1 : 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="absolute top-2 right-2 p-2 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </motion.button>
+        )}
       </div>
     </motion.div>
   );
