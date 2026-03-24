@@ -209,7 +209,6 @@ const Gallery = () => {
                       setSelectedPhoto(photo);
                       setShowLightbox(true);
                     }}
-                    onDelete={() => deletePhoto(photo)}
                   />
                 ))}
               </div>
@@ -240,6 +239,7 @@ const Gallery = () => {
               setSelectedPhoto(null);
             }}
             onNoteUpdate={fetchPhotos}
+            currentUserId={user?.id}
           />
         )}
       </AnimatePresence>

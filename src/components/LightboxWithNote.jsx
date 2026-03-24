@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { motion } from 'framer-motion';
 import { X, Edit3, Save, Trash2, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/supabaseClient';
@@ -40,12 +41,14 @@ const getDominantColor = (imageUrl, callback) => {
   img.src = imageUrl;
 };
 
-export default function LightboxWithNote({ photo, onClose, onNoteUpdate }) {
+export default function LightboxWithNote({ photo, onClose, onNoteUpdate, currentUserId }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [isEditing, setIsEditing] = useState(!photo.note);
   const [noteText, setNoteText] = useState(photo.note || '');
   const [isSaving, setIsSaving] = useState(false);
   const [borderColor, setBorderColor] = useState('rgb(168, 85, 247)');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const isPhotoOwner = currentUserId && photo.uploaded_by === currentUserId;
 
   useEffect(() => {
     if (photo && photo.image_url) {
@@ -96,6 +99,38 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate }) {
     }
   };
 
+  const handleDeletePhoto = async () => {
+    try {
+      setIsSaving(true);
+
+      // Delete from storage
+      if (photo.image_url) {
+        const filePath = photo.image_url.split('/').slice(-2).join('/');
+        const { error: storageError } = await supabase.storage
+          .from('gallery')
+          .remove([filePath]);
+
+        if (storageError) console.error('Storage delete error:', storageError);
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('gallery_photos')
+        .delete()
+        .eq('id', photo.id);
+
+      if (dbError) throw dbError;
+
+      toast.success('Photo deleted');
+      if (onNoteUpdate) await onNoteUpdate();
+      onClose();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      toast.error('Failed to delete photo');
+      setIsSaving(false);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -118,6 +153,17 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate }) {
       >
         {/* Close Button Row */}
         <div className="flex items-center justify-between px-3 py-2 flex-shrink-0 bg-transparent">
+          {isPhotoOwner && (
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-rose-500 hover:bg-rose-600 text-white transition-colors"
+              title="Delete photo"
+            >
+              <Trash2 className="w-5 h-5" />
+            </motion.button>
+          )}
           <div />
           <motion.button
             whileHover={{ scale: 1.1 }}
@@ -128,6 +174,58 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate }) {
             <X className="w-5 h-5" />
           </motion.button>
         </div>
+
+        {/* Delete Confirmation Dialog */}
+        <AnimatePresence>
+          {showDeleteConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed top-0 left-0 w-screen h-screen z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+              onClick={() => setShowDeleteConfirm(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-card rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="text-lg font-semibold text-foreground mb-2">Delete this photo?</h3>
+                <p className="text-sm text-muted-foreground mb-6">This action cannot be undone.</p>
+                <div className="flex gap-3 justify-end">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={isSaving}
+                    className="px-4 py-2 rounded-lg bg-muted text-foreground hover:bg-muted/80 transition-colors text-sm font-medium disabled:opacity-50"
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      handleDeletePhoto();
+                    }}
+                    disabled={isSaving}
+                    className="px-4 py-2 rounded-lg bg-rose-500 text-white hover:bg-rose-600 transition-colors text-sm font-medium disabled:opacity-50"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin inline mr-1" />
+                        Deleting...
+                      </>
+                    ) : (
+                      'Delete'
+                    )}
+                  </motion.button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Flip Container */}
         <div className="flex-1 min-h-0 relative" style={{ perspective: '1000px' }}>
