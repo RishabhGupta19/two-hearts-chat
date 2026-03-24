@@ -27,6 +27,7 @@ const shouldShowVentBanner = () => {
 };
 
 const Chat = () => {
+  console.log("debug"); // safe temporary
   const {
     mode, setMode, currentMessages, sendMessage, fetchMessages,
     partnerName, addGoal, resolveVent, isLinked, coupleId,
