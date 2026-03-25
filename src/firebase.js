@@ -15,25 +15,49 @@ const app = initializeApp(firebaseConfig);
 console.log("FIREBASE CONFIG:", firebaseConfig);
 export const messaging = getMessaging(app);
 
-export const requestNotificationPermission = async (api) => {
-  try {
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') return;
+// export const requestNotificationPermission = async (api) => {
+//   try {
+//     const permission = await Notification.requestPermission();
+//     if (permission !== 'granted') return;
 
-    const token = await getToken(messaging, {
-      vapidKey: "BEnQ3_LMLjr2lWnpM09GORQ5YuGN0C6dHV6JRurIzRJUcG6viwif4-5FFGDU1nj-m2-S0CtJ2SNZ61n21EEfbDg",
-    });
+//     const token = await getToken(messaging, {
+//       vapidKey: "BEnQ3_LMLjr2lWnpM09GORQ5YuGN0C6dHV6JRurIzRJUcG6viwif4-5FFGDU1nj-m2-S0CtJ2SNZ61n21EEfbDg",
+//     });
 
-    if (token) {
-      await api.post('/auth/fcm-token', { fcm_token: token });
-      console.log('FCM token saved');
-    }
-  } catch (err) {
-    console.error('Notification setup failed:', err);
-  }
-};
+//     if (token) {
+//       await api.post('/auth/fcm-token', { fcm_token: token });
+//       console.log('FCM token saved');
+//     }
+//   } catch (err) {
+//     console.error('Notification setup failed:', err);
+//   }
+// };
 
 export const onMessageListener = () =>
   new Promise((resolve) => {
     onMessage(messaging, (payload) => resolve(payload));
   });
+  export const requestNotificationPermission = async (api) => {
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return;
+
+    const registration = await navigator.serviceWorker.register(
+      "/firebase-messaging-sw.js"
+    );
+
+    await navigator.serviceWorker.ready;
+
+    const token = await getToken(messaging, {
+      vapidKey: "BEnQ3_LMLjr2lWnpM09GORQ5YuGN0C6dHV6JRurIzRJUcG6viwif4-5FFGDU1nj-m2-S0CtJ2SNZ61n21EEfbDg",
+      serviceWorkerRegistration: registration,
+    });
+
+    if (token) {
+      await api.post("/auth/fcm-token", { fcm_token: token });
+      console.log("FCM token saved");
+    }
+  } catch (err) {
+    console.error("Notification setup failed:", err);
+  }
+};

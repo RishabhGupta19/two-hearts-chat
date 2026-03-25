@@ -106,20 +106,51 @@ const AppRoutes = () => {
   );
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <AppProvider>
-        <BrowserRouter>
-            <AppRoutes />
+// const App = () => (
+  
+//   <QueryClientProvider client={queryClient}>
+//     <TooltipProvider>
+//       <Toaster />
+//       <Sonner />
+//       <AppProvider>
+//         <BrowserRouter>
+//             <AppRoutes />
           
-          <IOSInstallBanner />
-        </BrowserRouter>
-      </AppProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+//           <IOSInstallBanner />
+//         </BrowserRouter>
+//       </AppProvider>
+//     </TooltipProvider>
+//   </QueryClientProvider>
+// );
+
+const App = () => {
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/firebase-messaging-sw.js")
+        .then((registration) => {
+          console.log("SW registered:", registration);
+        })
+        .catch((err) => {
+          console.error("SW registration failed:", err);
+        });
+    }
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <AppProvider>
+          <BrowserRouter>
+            <AppRoutes />
+            <IOSInstallBanner />
+          </BrowserRouter>
+        </AppProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
