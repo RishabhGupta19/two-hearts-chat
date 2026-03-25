@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { HashRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner, toast } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -30,13 +30,23 @@ const useFirebaseForegroundMessages = () => {
     const unsubscribe = onMessage(messaging, (payload) => {
       console.log("Foreground message:", payload);
 
-      toast(payload?.notification?.title || "New message", {
-        description: payload?.notification?.body || "",
-      });
+      const title =
+        payload.notification?.title ||
+        payload.data?.title ||
+        "New Message";
 
+      const body =
+        payload.notification?.body ||
+        payload.data?.body ||
+        "";
+
+      // Toast
+      toast(title, { description: body });
+
+      // System notification
       if (Notification.permission === "granted") {
-        new Notification(payload.notification?.title || "New message", {
-          body: payload.notification?.body || "",
+        new Notification(title, {
+          body,
           icon: "/icon-192.png",
         });
       }
@@ -143,10 +153,10 @@ const App = () => {
         <Toaster />
         <Sonner />
         <AppProvider>
-          <BrowserRouter>
+          <HashRouter>
             <AppRoutes />
             <IOSInstallBanner />
-          </BrowserRouter>
+          </HashRouter>
         </AppProvider>
       </TooltipProvider>
     </QueryClientProvider>
