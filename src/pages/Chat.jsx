@@ -200,25 +200,7 @@ const Chat = () => {
           </div>
         </header>
 
-        {/* Vent banner */}
-        <AnimatePresence>
-          {isVent && showBanner && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between shrink-0"
-            >
-             
-              <button
-                onClick={() => setShowBanner(false)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                ✕
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+    
 
         <div
           data-pull-scroll
