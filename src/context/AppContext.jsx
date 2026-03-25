@@ -98,8 +98,18 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const syncUserState = (user) => {
-    const userProfilePic = user.profile_picture_url !== undefined ? user.profile_picture_url : null;
-    const partnerProfilePic = user.partner_profile_picture_url !== undefined ? user.partner_profile_picture_url : null;
+    console.log('syncUserState received user:', user);
+    console.log('user.profile_picture_url:', user.profile_picture_url);
+    console.log('user.partner_profile_picture_url:', user.partner_profile_picture_url);
+    console.log('user.profile_pic_url:', user.profile_pic_url);
+    console.log('user.partner_profile_pic_url:', user.partner_profile_pic_url);
+    
+    // Try multiple possible field names
+    const userProfilePic = user.profile_picture_url || user.profile_pic_url || null;
+    const partnerProfilePic = user.partner_profile_picture_url || user.partner_profile_pic_url || null;
+    
+    console.log('Resolved userProfilePic:', userProfilePic);
+    console.log('Resolved partnerProfilePic:', partnerProfilePic);
     
     // Save profile pics to localStorage for persistence
     if (userProfilePic) localStorage.setItem('userProfilePic', userProfilePic);
@@ -128,6 +138,7 @@ export const AppProvider = ({ children }) => {
   const fetchUser = async () => {
     try {
       const { data } = await api.get('/auth/me');
+      console.log('fetchUser raw response:', data);
       syncUserState(data.user || data);
     } catch {
       localStorage.removeItem('access_token');
@@ -237,7 +248,7 @@ export const AppProvider = ({ children }) => {
         });
         console.log('Backend response:', profileData);
         // If backend returns updated user, sync it
-        if (profileData?.user || profileData?.profile_pic_url) {
+        if (profileData?.user || profileData?.profile_pic_url || profileData?.profile_picture_url) {
           console.log('Syncing user state from backend response');
           syncUserState(profileData.user || profileData);
         }

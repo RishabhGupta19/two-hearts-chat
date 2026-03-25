@@ -33,6 +33,8 @@ const Chat = () => {
     partnerName, addGoal, resolveVent, isLinked, coupleId,
     userName, userRole, user, addWsMessage, userProfilePic, partnerProfilePic,
   } = useApp();
+  console.log('Chat component - userProfilePic:', userProfilePic);
+  console.log('Chat component - partnerProfilePic:', partnerProfilePic);
   const resolvedRole = userRole || user?.role || '';
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -180,6 +182,10 @@ const Chat = () => {
                     src={partnerProfilePic}
                     alt={partnerName || 'Partner'}
                     className="h-6 w-6 rounded-full object-cover shrink-0"
+                    onError={(e) => {
+                      console.warn('Failed to load partner profile pic:', partnerProfilePic);
+                      e.currentTarget.style.display = 'none';
+                    }}
                   />
                 ) : (
                   <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
@@ -198,6 +204,10 @@ const Chat = () => {
                     src={userProfilePic}
                     alt={userName || 'You'}
                     className="h-6 w-6 rounded-full object-cover shrink-0"
+                    onError={(e) => {
+                      console.warn('Failed to load user profile pic:', userProfilePic);
+                      e.currentTarget.style.display = 'none';
+                    }}
                   />
                 ) : (
                   <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
@@ -211,14 +221,14 @@ const Chat = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0 min-w-0">
             {isVent && (
               <motion.button
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setShowResolution(true)}
-                className="text-[10px] rounded-pill px-2 py-1 bg-muted text-muted-foreground hover:bg-muted/80 font-body whitespace-nowrap"
+                className="text-[10px] rounded-pill px-2 py-1 bg-muted text-muted-foreground hover:bg-muted/80 font-body whitespace-nowrap hidden sm:block"
               >
                 Feeling better?
               </motion.button>
