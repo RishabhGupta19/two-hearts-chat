@@ -13,7 +13,7 @@ export const ModeToggle = ({ mode, onModeChange }) => {
       <motion.button
         key={m}
         onClick={() => onModeChange(m)}
-        className={`relative rounded-pill px-2.5 py-1 text-xs font-medium font-body transition-colors ${
+        className={`relative rounded-pill px-2.5 py-1 text-xs font-medium font-body transition-colors whitespace-nowrap ${
         mode === m ? '' : 'text-muted-foreground hover:text-foreground'}`
         }
         whileTap={{ scale: 0.97 }}>

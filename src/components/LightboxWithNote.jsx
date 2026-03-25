@@ -158,7 +158,7 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => setShowDeleteConfirm(true)}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-rose-500 hover:bg-rose-600 text-white transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent hover:bg-white/10 text-white transition-colors"
               title="Delete photo"
             >
               <Trash2 className="w-5 h-5" />
