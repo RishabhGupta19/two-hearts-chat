@@ -1,10 +1,12 @@
 import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 
-export const ChatBubble = ({ message, index, seen }) => {  // ← add seen prop
+export const ChatBubble = ({ message, index, seen }) => {
   const { user, mode, partnerName } = useApp();
 
   const isAI = message.sender === 'ai';
+  const isCalm = mode === 'calm';  // ← add this
+
   const isMine = isAI
     ? false
     : typeof message.isMine === 'boolean'
@@ -39,8 +41,6 @@ export const ChatBubble = ({ message, index, seen }) => {  // ← add seen prop
           <span className="mb-1 block text-xs font-medium text-muted-foreground">{senderLabel}</span>
         )}
         <p className="leading-relaxed">{message.text}</p>
-
-        {/* Timestamp + seen tick */}
         <span className="mt-0.5 flex items-center justify-end gap-1 text-[9px] opacity-60">
           {new Date(message.timestamp + (message.timestamp.endsWith('Z') || message.timestamp.includes('+') ? '' : 'Z')).toLocaleTimeString('en-IN', {
             timeZone: 'Asia/Kolkata',
@@ -48,18 +48,15 @@ export const ChatBubble = ({ message, index, seen }) => {  // ← add seen prop
             minute: '2-digit',
             hour12: true,
           })}
-          {isMine && (
-  <span
-    className={`text-[11px] font-bold transition-colors duration-300 ${
-      seen ? 'text-sky-300' : 'text-white/50'
-    }`}
-  >
-    {seen ? '✓✓' : '✓'}
-  </span>
-)}
-
+          
+          {isMine && isCalm && (
+            <span className={`text-[11px] font-bold transition-colors duration-300 ${
+              seen ? 'text-sky-300' : 'text-white/50'
+            }`}>
+              {seen ? '✓✓' : '✓'}
+            </span>
+          )}
         </span>
-
       </div>
     </motion.div>
   );
