@@ -37,6 +37,7 @@ const Chat = () => {
   console.log('Chat component - partnerProfilePic:', partnerProfilePic);
   const resolvedRole = userRole || user?.role || '';
   const [input, setInput] = useState('');
+  const [seenMessageIds, setSeenMessageIds] = useState(new Set());
   const [sending, setSending] = useState(false);
   const [showGoalInput, setShowGoalInput] = useState(false);
   const [goalText, setGoalText] = useState('');
@@ -63,9 +64,19 @@ const Chat = () => {
   }, []);
 
   const handleWsMessage = useCallback((msg) => {
+    if (msg.type === "seen") {
+        // Update messages to show double tick
+        setSeenMessageIds(prev => {
+            const updated = new Set(prev);
+            msg.message_ids.forEach(id => updated.add(id));
+            return updated;
+        });
+        return;
+    }
     addWsMessage(msg);
     setPartnerTyping(false);
-  }, [addWsMessage]);
+}, [addWsMessage]);
+
 
   const handleWsTyping = useCallback(() => {
     setPartnerTyping(true);
@@ -87,6 +98,24 @@ const Chat = () => {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentMessages]);
+// Send seen acknowledgement when partner messages arrive
+useEffect(() => {
+    if (!connected || !isCalm) return;
+
+    const unseenPartnerMsgIds = currentMessages
+        .filter(m => !m.isMine && !seenMessageIds.has(m.id))
+        .map(m => m.id)
+        .filter(Boolean);
+
+    if (unseenPartnerMsgIds.length > 0) {
+        wsSend({ type: "seen", message_ids: unseenPartnerMsgIds });
+        setSeenMessageIds(prev => {
+            const updated = new Set(prev);
+            unseenPartnerMsgIds.forEach(id => updated.add(id));
+            return updated;
+        });
+    }
+}, [currentMessages, connected, isCalm]);
 
   useEffect(() => () => {
     if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
@@ -281,8 +310,14 @@ const Chat = () => {
                 </div>
               )}
               {currentMessages.map((msg, i) => (
-                <ChatBubble key={msg.id || i} message={msg} index={i} />
+                  <ChatBubble
+                      key={msg.id || i}
+                      message={msg}
+                      index={i}
+                      seen={seenMessageIds.has(msg.id)}  // ← add this
+                  />
               ))}
+
               <AnimatePresence>
                 {sending && <TypingIndicator label="Luna" />}
                 {isCalm && partnerTyping && <TypingIndicator label={partnerName || 'Partner'} />}

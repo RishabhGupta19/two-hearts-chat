@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 
-export const ChatBubble = ({ message, index }) => {
+export const ChatBubble = ({ message, index, seen }) => {  // ← add seen prop
   const { user, mode, partnerName } = useApp();
 
   const isAI = message.sender === 'ai';
@@ -39,14 +39,22 @@ export const ChatBubble = ({ message, index }) => {
           <span className="mb-1 block text-xs font-medium text-muted-foreground">{senderLabel}</span>
         )}
         <p className="leading-relaxed">{message.text}</p>
-        <span className="mt-0.5 block text-[9px] opacity-60">
+
+        {/* Timestamp + seen tick */}
+        <span className="mt-0.5 flex items-center justify-end gap-1 text-[9px] opacity-60">
           {new Date(message.timestamp + (message.timestamp.endsWith('Z') || message.timestamp.includes('+') ? '' : 'Z')).toLocaleTimeString('en-IN', {
-  timeZone: 'Asia/Kolkata',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: true,
-})}
+            timeZone: 'Asia/Kolkata',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          })}
+          {isMine && (                          // ← only show on sent messages
+            <span className={seen ? 'text-blue-300' : 'opacity-60'}>
+              {seen ? '✓✓' : '✓'}
+            </span>
+          )}
         </span>
+
       </div>
     </motion.div>
   );

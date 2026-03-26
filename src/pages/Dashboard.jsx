@@ -174,7 +174,7 @@ const Dashboard = () => {
               </div>
             </motion.button>
             <span className="text-sm font-body text-foreground hidden sm:block">{userName}</span>
-
+            
           </div>
           <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground font-body">
             Logout
