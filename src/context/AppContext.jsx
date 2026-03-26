@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import api from '@/api';
+import { supabase } from '@/integrations/supabase/supabaseClient';
 import { requestNotificationPermission } from '@/firebase';
 
 const AppContext = createContext(null);
@@ -22,6 +23,8 @@ const defaultState = {
   isLinked: false,
   assessmentCompleted: false,
   assessmentProfile: null,
+  userProfilePic: localStorage.getItem('userProfilePic') || null,
+  partnerProfilePic: localStorage.getItem('partnerProfilePic') || null,
   mode: localStorage.getItem('chat_mode') || 'calm',
   messages: [],
   goals: [],
@@ -95,6 +98,23 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const syncUserState = (user) => {
+    console.log('syncUserState received user:', user);
+    console.log('user.profile_picture_url:', user.profile_picture_url);
+    console.log('user.partner_profile_picture_url:', user.partner_profile_picture_url);
+    console.log('user.profile_pic_url:', user.profile_pic_url);
+    console.log('user.partner_profile_pic_url:', user.partner_profile_pic_url);
+    
+    // Try multiple possible field names
+    const userProfilePic = user.profile_picture_url || user.profile_pic_url || null;
+    const partnerProfilePic = user.partner_profile_picture_url || user.partner_profile_pic_url || null;
+    
+    console.log('Resolved userProfilePic:', userProfilePic);
+    console.log('Resolved partnerProfilePic:', partnerProfilePic);
+    
+    // Save profile pics to localStorage for persistence
+    if (userProfilePic) localStorage.setItem('userProfilePic', userProfilePic);
+    if (partnerProfilePic) localStorage.setItem('partnerProfilePic', partnerProfilePic);
+    
     setState((s) => ({
       ...s,
       isAuthenticated: true,
@@ -108,6 +128,9 @@ export const AppProvider = ({ children }) => {
       isLinked: user.is_linked || false,
       assessmentCompleted: user.assessment_completed || false,
       assessmentProfile: user.assessment_profile || null,
+      // Use from backend if available, otherwise fall back to localStorage
+      userProfilePic: userProfilePic || s.userProfilePic || localStorage.getItem('userProfilePic'),
+      partnerProfilePic: partnerProfilePic || s.partnerProfilePic || localStorage.getItem('partnerProfilePic'),
       loading: false,
     }));
   };
@@ -115,6 +138,7 @@ export const AppProvider = ({ children }) => {
   const fetchUser = async () => {
     try {
       const { data } = await api.get('/auth/me');
+      console.log('fetchUser raw response:', data);
       syncUserState(data.user || data);
     } catch {
       localStorage.removeItem('access_token');
@@ -173,6 +197,99 @@ export const AppProvider = ({ children }) => {
 
   const setNickname = useCallback((nickname) => {
     setState((s) => ({ ...s, nickname }));
+  }, []);
+
+  const updateProfilePic = useCallback(async (file) => {
+    try {
+      // Generate unique filename
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substr(2, 9);
+      const fileName = `${timestamp}-${random}-${file.name}`;
+      const filePath = `profile_pics/${state.user?.id || 'unknown'}/${fileName}`;
+
+      console.log('Uploading profile pic to:', filePath);
+
+      // Upload to Supabase Storage
+      const { data, error: uploadError } = await supabase.storage
+        .from('gallery')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('Upload successful:', data);
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('gallery')
+        .getPublicUrl(filePath);
+
+      const imageUrl = urlData.publicUrl;
+      console.log('Generated public URL:', imageUrl);
+
+      // Save to localStorage for persistence
+      localStorage.setItem('userProfilePic', imageUrl);
+
+      // Update state immediately with the new profile picture
+      setState((s) => {
+        console.log('Updating state with userProfilePic:', imageUrl);
+        return {
+          ...s,
+          userProfilePic: imageUrl,
+        };
+      });
+
+      // Save profile pic URL to backend (fire and forget - best effort)
+      try {
+        const { data: profileData } = await api.put('/auth/profile', {
+          profile_pic_url: imageUrl,
+        });
+        console.log('Backend response:', profileData);
+        // If backend returns updated user, sync it
+        if (profileData?.user || profileData?.profile_pic_url || profileData?.profile_picture_url) {
+          console.log('Syncing user state from backend response');
+          syncUserState(profileData.user || profileData);
+        }
+      } catch (backendErr) {
+        console.warn('Backend profile update failed, but image uploaded:', backendErr);
+      }
+
+      return imageUrl;
+    } catch (err) {
+      console.error('Failed to update profile pic:', err);
+      throw err;
+    }
+  }, [state.user?.id]);
+
+  const removeProfilePic = useCallback(async () => {
+    try {
+      // Remove from localStorage
+      localStorage.removeItem('userProfilePic');
+      
+      // Update state immediately
+      setState((s) => ({
+        ...s,
+        userProfilePic: null,
+      }));
+
+      // Remove from backend (fire and forget - best effort)
+      try {
+        const { data: profileData } = await api.put('/auth/profile', {
+          profile_pic_url: null,
+        });
+        // If backend returns updated user, sync it
+        if (profileData?.user || profileData?.profile_pic_url !== undefined) {
+          syncUserState(profileData.user || profileData);
+        }
+      } catch (backendErr) {
+        console.warn('Backend profile update failed, but locally removed:', backendErr);
+      }
+    } catch (err) {
+      console.error('Failed to remove profile pic:', err);
+      throw err;
+    }
   }, []);
 
   const setMode = useCallback((mode) => {
@@ -330,6 +447,8 @@ export const AppProvider = ({ children }) => {
         linkPartner,
         completeAssessment,
         setNickname,
+        updateProfilePic,
+        removeProfilePic,
         setMode,
         sendMessage,
         fetchMessages,

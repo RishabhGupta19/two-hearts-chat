@@ -5,7 +5,8 @@ import { Toaster as Sonner, toast } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider, useApp } from "@/context/AppContext";
-import { onMessageListener } from "@/firebase";
+import { onMessage } from "firebase/messaging";
+import { messaging } from "@/firebase";
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
 import Assessment from "./pages/Assessment";
@@ -18,23 +19,30 @@ import Gallery from "./pages/Gallery";
 import NotFound from "./pages/NotFound";
 import IOSInstallBanner from "@/components/IOSInstallBanner";
 
+
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
 
+
 const useFirebaseForegroundMessages = () => {
   useEffect(() => {
-    const listen = () => {
-      onMessageListener()
-        .then((payload) => {
-          toast(payload?.notification?.title || "New message", {
-            description: payload?.notification?.body || "",
-          });
-          listen(); // re-subscribe for next message
-        })
-        .catch((err) => console.error("FCM foreground error:", err));
-    };
-    listen();
+    const unsubscribe = onMessage(messaging, (payload) => {
+      console.log("Foreground message:", payload);
+
+      toast(payload?.notification?.title || "New message", {
+        description: payload?.notification?.body || "",
+      });
+
+      if (Notification.permission === "granted") {
+        new Notification(payload.notification?.title || "New message", {
+          body: payload.notification?.body || "",
+          icon: "/icon-192.png",
+        });
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 };
 
@@ -98,19 +106,51 @@ const AppRoutes = () => {
   );
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <AppProvider>
-        <BrowserRouter>
+// const App = () => (
+  
+//   <QueryClientProvider client={queryClient}>
+//     <TooltipProvider>
+//       <Toaster />
+//       <Sonner />
+//       <AppProvider>
+//         <BrowserRouter>
+//             <AppRoutes />
+          
+//           <IOSInstallBanner />
+//         </BrowserRouter>
+//       </AppProvider>
+//     </TooltipProvider>
+//   </QueryClientProvider>
+// );
+
+const App = () => {
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/firebase-messaging-sw.js")
+        .then((registration) => {
+          console.log("SW registered:", registration);
+        })
+        .catch((err) => {
+          console.error("SW registration failed:", err);
+        });
+    }
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <AppProvider>
+          <BrowserRouter>
             <AppRoutes />
-          <IOSInstallBanner />
-        </BrowserRouter>
-      </AppProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+            <IOSInstallBanner />
+          </BrowserRouter>
+        </AppProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

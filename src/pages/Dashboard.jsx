@@ -1,17 +1,26 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
-import { Copy, Check, X, Heart, Users, UserPlus, Loader2, Link } from 'lucide-react';
+import { Copy, Check, X, Heart, Users, UserPlus, Loader2, Link, Camera, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 const Dashboard = () => {
   const state = useApp();
-  const { userName, partnerName, isLinked, logout, generateCoupleId, linkPartner } = state;
+  const { userName, partnerName, isLinked, logout, generateCoupleId, linkPartner, userProfilePic, updateProfilePic, removeProfilePic } = state;
+  
+  // Log whenever userProfilePic changes
+  console.log('Dashboard render - userProfilePic:', userProfilePic);
+  
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showProfilePicModal, setShowProfilePicModal] = useState(false);
+  const [picLoading, setPicLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   // Partner linking modal state
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -80,6 +89,57 @@ const Dashboard = () => {
     }
   };
 
+  const handleProfilePicUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be smaller than 5MB');
+      return;
+    }
+
+    try {
+      setPicLoading(true);
+      setImageError(false); // Reset error state before upload
+      await updateProfilePic(file);
+      toast.success('Profile picture updated! 📸');
+      // Keep modal open for 2 seconds to let image load, then close
+      setTimeout(() => setShowProfilePicModal(false), 2000);
+    } catch (err) {
+      console.error('Upload failed:', err);
+      toast.error(err.message || 'Failed to update profile picture');
+    } finally {
+      setPicLoading(false);
+    }
+  };
+
+  const handleRemoveProfilePic = async () => {
+    try {
+      setPicLoading(true);
+      await removeProfilePic();
+      toast.success('Profile picture removed');
+      setImageError(false);
+      setShowProfilePicModal(false);
+    } catch (err) {
+      console.error('Failed to remove profile pic:', err);
+      toast.error('Failed to remove profile picture');
+    } finally {
+      setPicLoading(false);
+    }
+  };
+
+  const openProfilePicModal = () => {
+    setImageError(false);
+    setShowProfilePicModal(true);
+  };
+
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
       {/* Top bar */}
@@ -87,9 +147,32 @@ const Dashboard = () => {
         <h1 className="font-heading text-xl font-bold text-foreground">Solace</h1>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium text-primary">
-              {userName.charAt(0).toUpperCase()}
-            </div>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              onClick={openProfilePicModal}
+              className="relative h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium text-primary overflow-hidden border border-primary/30 hover:border-primary transition-colors group"
+            >
+              {userProfilePic && !imageError ? (
+                <img 
+                  key={userProfilePic}
+                  src={userProfilePic} 
+                  alt={userName} 
+                  className="h-full w-full object-cover" 
+                  onError={() => {
+                    console.error('Failed to load profile image at:', userProfilePic);
+                    setImageError(true);
+                  }}
+                  onLoad={() => {
+                    console.log('Profile image loaded successfully from:', userProfilePic);
+                  }}
+                />
+              ) : (
+                <span>{userName.charAt(0).toUpperCase()}</span>
+              )}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                <Camera className="h-3 w-3 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </motion.button>
             <span className="text-sm font-body text-foreground hidden sm:block">{userName}</span>
             
           </div>
@@ -107,9 +190,10 @@ const Dashboard = () => {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-12">
           
-          <h2 className="font-heading text-2xl font-semibold text-foreground mb-2">
+          <h2 className="font-heading text-2xl font-semibold text-foreground mb-6">
             Welcome back, {userName}
           </h2>
+
           {isLinked ? (
             <p className="text-sm text-muted-foreground font-body">
               Connected with {partnerName} 🧡
@@ -365,11 +449,98 @@ const Dashboard = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
-          className="text-center text-xs text-muted-foreground font-body mt-12">
+          className="text-center text-xs text-muted-foreground font-body mt-16">
           
           Your conversations are private and safe. 🔒
         </motion.p>
       </main>
+
+      {/* Profile Picture Modal */}
+      <AnimatePresence>
+        {showProfilePicModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+            onClick={() => setShowProfilePicModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-card border border-border rounded-xl p-6 shadow-lg w-72 text-center relative"
+            >
+              <button onClick={() => setShowProfilePicModal(false)} className="absolute top-2 right-2 text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="mb-4">
+                <div className="h-24 w-24 rounded-full bg-primary/20 flex items-center justify-center text-4xl font-medium text-primary overflow-hidden border-2 border-primary/30 mx-auto">
+                  {userProfilePic && !imageError ? (
+                    <img 
+                      key={`modal-${userProfilePic}`}
+                      src={userProfilePic} 
+                      alt={userName} 
+                      className="h-full w-full object-cover" 
+                      onError={() => {
+                        console.error('Failed to load modal profile image at:', userProfilePic);
+                        setImageError(true);
+                      }}
+                      onLoad={() => {
+                        console.log('Modal profile image loaded successfully from:', userProfilePic);
+                      }}
+                    />
+                  ) : (
+                    <span>{userName.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+              </div>
+
+              {imageError && (
+                <p className="text-xs text-destructive mb-3 font-body">
+                  ⚠️ Unable to load the profile picture. This may be a network issue. Please try uploading again.
+                </p>
+              )}
+
+              <p className="text-sm text-muted-foreground font-body mb-4">
+                {imageError ? 'Upload a new picture' : userProfilePic ? 'Change or remove your profile picture' : 'Add a profile picture'}
+              </p>
+
+              <div className="space-y-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={picLoading}
+                  className="w-full rounded-md bg-primary text-primary-foreground py-2 text-sm font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Camera className="h-4 w-4" />
+                  {userProfilePic ? 'Edit Photo' : 'Upload Photo'}
+                </button>
+
+                {userProfilePic && (
+                  <button
+                    onClick={handleRemoveProfilePic}
+                    disabled={picLoading}
+                    className="w-full rounded-md bg-transparent border border-white/20 hover:bg-white/10 py-2 text-sm font-medium text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remove Photo
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleProfilePicUpload}
+        className="hidden"
+      />
     </div>
   );
 };
