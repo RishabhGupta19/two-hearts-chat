@@ -32,9 +32,9 @@ const Chat = () => {
     partnerName, addGoal, resolveVent, isLinked, coupleId,
     userName, userRole, user, addWsMessage,
   } = useApp();
+
   const resolvedRole = userRole || user?.role || '';
   const [input, setInput] = useState('');
-  const [seenMessageIds, setSeenMessageIds] = useState(new Set());
   const [sending, setSending] = useState(false);
   const [showGoalInput, setShowGoalInput] = useState(false);
   const [goalText, setGoalText] = useState('');
@@ -45,6 +45,15 @@ const Chat = () => {
   const [pendingMode, setPendingMode] = useState(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [goalConfirmation, setGoalConfirmation] = useState('');
+
+  // ✅ 1. seenMessageIds state first
+  const [seenMessageIds, setSeenMessageIds] = useState(() => {
+    try {
+      const stored = localStorage.getItem(`seen_${coupleId}`);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+  });
+
   const partnerTypingTimer = useRef(null);
   const goalConfirmationTimer = useRef(null);
   const chatEndRef = useRef(null);
@@ -60,20 +69,27 @@ const Chat = () => {
     goalConfirmationTimer.current = setTimeout(() => setGoalConfirmation(''), 2500);
   }, []);
 
+  // ✅ 2. updateSeenIds before handleWsMessage
+  const updateSeenIds = useCallback((newIds) => {
+    setSeenMessageIds(prev => {
+      const updated = new Set(prev);
+      newIds.forEach(id => updated.add(id));
+      try {
+        localStorage.setItem(`seen_${coupleId}`, JSON.stringify([...updated]));
+      } catch {}
+      return updated;
+    });
+  }, [coupleId]);
+
+  // ✅ 3. handleWsMessage after updateSeenIds
   const handleWsMessage = useCallback((msg) => {
-    if (msg.type === "seen") {
-        // Update messages to show double tick
-        setSeenMessageIds(prev => {
-            const updated = new Set(prev);
-            msg.message_ids.forEach(id => updated.add(id));
-            return updated;
-        });
-        return;
+    if (msg.type === 'seen') {
+      updateSeenIds(msg.message_ids);
+      return;
     }
     addWsMessage(msg);
     setPartnerTyping(false);
-}, [addWsMessage]);
-
+  }, [addWsMessage, updateSeenIds]);
 
   const handleWsTyping = useCallback(() => {
     setPartnerTyping(true);
@@ -92,27 +108,32 @@ const Chat = () => {
     fetchMessages(mode);
   }, [mode, fetchMessages]);
 
+  // Sync seen from DB (messages with seen: true)
+  useEffect(() => {
+    if (!coupleId) return;
+    const alreadySeenIds = currentMessages
+      .filter(m => m.seen === true)
+      .map(m => m.id)
+      .filter(Boolean);
+    if (alreadySeenIds.length > 0) updateSeenIds(alreadySeenIds);
+  }, [currentMessages, updateSeenIds]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentMessages]);
-// Send seen acknowledgement when partner messages arrive
-useEffect(() => {
+
+  // Send seen acknowledgement when partner messages arrive
+  useEffect(() => {
     if (!connected || !isCalm) return;
-
     const unseenPartnerMsgIds = currentMessages
-        .filter(m => !m.isMine && !seenMessageIds.has(m.id))
-        .map(m => m.id)
-        .filter(Boolean);
-
+      .filter(m => !m.isMine && !seenMessageIds.has(m.id))
+      .map(m => m.id)
+      .filter(Boolean);
     if (unseenPartnerMsgIds.length > 0) {
-        wsSend({ type: "seen", message_ids: unseenPartnerMsgIds });
-        setSeenMessageIds(prev => {
-            const updated = new Set(prev);
-            unseenPartnerMsgIds.forEach(id => updated.add(id));
-            return updated;
-        });
+      wsSend({ type: 'seen', message_ids: unseenPartnerMsgIds });
+      updateSeenIds(unseenPartnerMsgIds);
     }
-}, [currentMessages, connected, isCalm]);
+  }, [currentMessages, connected, isCalm, updateSeenIds]);
 
   useEffect(() => () => {
     if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
@@ -178,9 +199,7 @@ useEffect(() => {
       setInput('');
       setGoalText('');
       setShowGoalInput(false);
-      if (pendingMode === 'vent') {
-        setShowBanner(shouldShowVentBanner());
-      }
+      if (pendingMode === 'vent') setShowBanner(shouldShowVentBanner());
     }
     setShowModeConfirm(false);
     setPendingMode(null);
@@ -238,7 +257,6 @@ useEffect(() => {
               exit={{ opacity: 0, height: 0 }}
               className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between shrink-0"
             >
-             
               <button
                 onClick={() => setShowBanner(false)}
                 className="text-xs text-muted-foreground hover:text-foreground"
@@ -291,14 +309,13 @@ useEffect(() => {
                 </div>
               )}
               {currentMessages.map((msg, i) => (
-                  <ChatBubble
-                      key={msg.id || i}
-                      message={msg}
-                      index={i}
-                      seen={seenMessageIds.has(msg.id)}  // ← add this
-                  />
+                <ChatBubble
+                  key={msg.id || i}
+                  message={msg}
+                  index={i}
+                  seen={seenMessageIds.has(msg.id)}
+                />
               ))}
-
               <AnimatePresence>
                 {sending && <TypingIndicator label="Luna" />}
                 {isCalm && partnerTyping && <TypingIndicator label={partnerName || 'Partner'} />}
@@ -308,7 +325,7 @@ useEffect(() => {
           )}
         </div>
 
-        {/* Goal input (calm mode only) */}
+        {/* Goal input */}
         <AnimatePresence>
           {isCalm && !showNotLinkedMessage && showGoalInput && (
             <motion.div
@@ -318,7 +335,7 @@ useEffect(() => {
               className="border-t border-border bg-card px-4 py-3"
             >
               <p className="text-xs font-medium text-foreground font-body mb-2">
-                Set a goals for {partnerName || 'Partner'} to see
+                Set a goal for {partnerName || 'Partner'} to see
               </p>
               <div className="flex gap-2 mb-2">
                 {[['growth', '💪'], ['us', '❤️'], ['personal', '🌱']].map(([tag, emoji]) => (
