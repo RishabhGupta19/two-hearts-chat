@@ -27,16 +27,14 @@ const shouldShowVentBanner = () => {
 };
 
 const Chat = () => {
-  console.log("debug"); // safe temporary
   const {
     mode, setMode, currentMessages, sendMessage, fetchMessages,
     partnerName, addGoal, resolveVent, isLinked, coupleId,
-    userName, userRole, user, addWsMessage, userProfilePic, partnerProfilePic,
+    userName, userRole, user, addWsMessage,
   } = useApp();
-  console.log('Chat component - userProfilePic:', userProfilePic);
-  console.log('Chat component - partnerProfilePic:', partnerProfilePic);
   const resolvedRole = userRole || user?.role || '';
   const [input, setInput] = useState('');
+  const [seenMessageIds, setSeenMessageIds] = useState(new Set());
   const [sending, setSending] = useState(false);
   const [showGoalInput, setShowGoalInput] = useState(false);
   const [goalText, setGoalText] = useState('');
@@ -63,9 +61,19 @@ const Chat = () => {
   }, []);
 
   const handleWsMessage = useCallback((msg) => {
+    if (msg.type === "seen") {
+        // Update messages to show double tick
+        setSeenMessageIds(prev => {
+            const updated = new Set(prev);
+            msg.message_ids.forEach(id => updated.add(id));
+            return updated;
+        });
+        return;
+    }
     addWsMessage(msg);
     setPartnerTyping(false);
-  }, [addWsMessage]);
+}, [addWsMessage]);
+
 
   const handleWsTyping = useCallback(() => {
     setPartnerTyping(true);
@@ -87,6 +95,24 @@ const Chat = () => {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentMessages]);
+// Send seen acknowledgement when partner messages arrive
+useEffect(() => {
+    if (!connected || !isCalm) return;
+
+    const unseenPartnerMsgIds = currentMessages
+        .filter(m => !m.isMine && !seenMessageIds.has(m.id))
+        .map(m => m.id)
+        .filter(Boolean);
+
+    if (unseenPartnerMsgIds.length > 0) {
+        wsSend({ type: "seen", message_ids: unseenPartnerMsgIds });
+        setSeenMessageIds(prev => {
+            const updated = new Set(prev);
+            unseenPartnerMsgIds.forEach(id => updated.add(id));
+            return updated;
+        });
+    }
+}, [currentMessages, connected, isCalm]);
 
   useEffect(() => () => {
     if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
@@ -177,58 +203,24 @@ const Chat = () => {
             </button>
             {isCalm && (
               <>
-                {partnerProfilePic ? (
-                  <img
-                    src={partnerProfilePic}
-                    alt={partnerName || 'Partner'}
-                    className="h-6 w-6 rounded-full object-cover shrink-0"
-                    onError={(e) => {
-                      console.warn('Failed to load partner profile pic:', partnerProfilePic);
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
-                    {(partnerName || 'P').charAt(0)}
-                  </div>
-                )}
+                <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
+                  {(partnerName || 'P').charAt(0)}
+                </div>
                 <span className="text-xs font-body font-medium text-foreground truncate">
                   {partnerName || 'Partner'}
                 </span>
               </>
             )}
-            {isVent && (
-              <>
-                {userProfilePic ? (
-                  <img
-                    src={userProfilePic}
-                    alt={userName || 'You'}
-                    className="h-6 w-6 rounded-full object-cover shrink-0"
-                    onError={(e) => {
-                      console.warn('Failed to load user profile pic:', userProfilePic);
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
-                    {(userName || 'Y').charAt(0)}
-                  </div>
-                )}
-                <span className="text-xs font-body font-medium text-foreground truncate">
-                  {userName || 'You'}
-                </span>
-              </>
-            )}
           </div>
 
-          <div className="flex items-center gap-1 shrink-0 min-w-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             {isVent && (
               <motion.button
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setShowResolution(true)}
-                className="text-[10px] rounded-pill px-2 py-1 bg-muted text-muted-foreground hover:bg-muted/80 font-body whitespace-nowrap hidden sm:block"
+                className="text-[10px] rounded-pill px-2 py-1 bg-muted text-muted-foreground hover:bg-muted/80 font-body whitespace-nowrap"
               >
                 Feeling better?
               </motion.button>
@@ -237,7 +229,25 @@ const Chat = () => {
           </div>
         </header>
 
-    
+        {/* Vent banner */}
+        <AnimatePresence>
+          {isVent && showBanner && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center justify-between shrink-0"
+            >
+             
+              <button
+                onClick={() => setShowBanner(false)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                ✕
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div
           data-pull-scroll
@@ -281,8 +291,14 @@ const Chat = () => {
                 </div>
               )}
               {currentMessages.map((msg, i) => (
-                <ChatBubble key={msg.id || i} message={msg} index={i} />
+                  <ChatBubble
+                      key={msg.id || i}
+                      message={msg}
+                      index={i}
+                      seen={seenMessageIds.has(msg.id)}  // ← add this
+                  />
               ))}
+
               <AnimatePresence>
                 {sending && <TypingIndicator label="Luna" />}
                 {isCalm && partnerTyping && <TypingIndicator label={partnerName || 'Partner'} />}
