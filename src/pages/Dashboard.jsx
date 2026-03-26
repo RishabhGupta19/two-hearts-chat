@@ -91,7 +91,7 @@ const Dashboard = () => {
               {userName.charAt(0).toUpperCase()}
             </div>
             <span className="text-sm font-body text-foreground hidden sm:block">{userName}</span>
-            <div className="h-2 w-2 rounded-full bg-primary" title="Online" />
+            
           </div>
           <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground font-body">
             Logout
