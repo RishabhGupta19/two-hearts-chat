@@ -25,10 +25,7 @@ const Gallery = () => {
   }, [coupleId]);
 
   const fetchPhotos = async () => {
-    if (!coupleId) {
-      console.log('No coupleId available');
-      return;
-    }
+    if (!coupleId) return;
 
     try {
       setLoading(true);
