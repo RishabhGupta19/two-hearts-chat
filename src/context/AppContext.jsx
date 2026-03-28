@@ -98,18 +98,8 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const syncUserState = (user) => {
-    console.log('syncUserState received user:', user);
-    console.log('user.profile_picture_url:', user.profile_picture_url);
-    console.log('user.partner_profile_picture_url:', user.partner_profile_picture_url);
-    console.log('user.profile_pic_url:', user.profile_pic_url);
-    console.log('user.partner_profile_pic_url:', user.partner_profile_pic_url);
-    
-    // Try multiple possible field names
     const userProfilePic = user.profile_picture_url || user.profile_pic_url || null;
     const partnerProfilePic = user.partner_profile_picture_url || user.partner_profile_pic_url || null;
-    
-    console.log('Resolved userProfilePic:', userProfilePic);
-    console.log('Resolved partnerProfilePic:', partnerProfilePic);
     
     // Save profile pics to localStorage for persistence
     if (userProfilePic) localStorage.setItem('userProfilePic', userProfilePic);
@@ -138,7 +128,6 @@ export const AppProvider = ({ children }) => {
   const fetchUser = async () => {
     try {
       const { data } = await api.get('/auth/me');
-      console.log('fetchUser raw response:', data);
       syncUserState(data.user || data);
     } catch {
       localStorage.removeItem('access_token');
@@ -207,9 +196,6 @@ export const AppProvider = ({ children }) => {
       const fileName = `${timestamp}-${random}-${file.name}`;
       const filePath = `profile_pics/${state.user?.id || 'unknown'}/${fileName}`;
 
-      console.log('Uploading profile pic to:', filePath);
-
-      // Upload to Supabase Storage
       const { data, error: uploadError } = await supabase.storage
         .from('gallery')
         .upload(filePath, file);
@@ -219,22 +205,16 @@ export const AppProvider = ({ children }) => {
         throw uploadError;
       }
 
-      console.log('Upload successful:', data);
-
-      // Get public URL
       const { data: urlData } = supabase.storage
         .from('gallery')
         .getPublicUrl(filePath);
 
       const imageUrl = urlData.publicUrl;
-      console.log('Generated public URL:', imageUrl);
-
       // Save to localStorage for persistence
       localStorage.setItem('userProfilePic', imageUrl);
 
       // Update state immediately with the new profile picture
       setState((s) => {
-        console.log('Updating state with userProfilePic:', imageUrl);
         return {
           ...s,
           userProfilePic: imageUrl,
@@ -246,10 +226,7 @@ export const AppProvider = ({ children }) => {
         const { data: profileData } = await api.put('/auth/profile', {
           profile_pic_url: imageUrl,
         });
-        console.log('Backend response:', profileData);
-        // If backend returns updated user, sync it
         if (profileData?.user || profileData?.profile_pic_url || profileData?.profile_picture_url) {
-          console.log('Syncing user state from backend response');
           syncUserState(profileData.user || profileData);
         }
       } catch (backendErr) {

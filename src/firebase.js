@@ -12,26 +12,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-console.log("FIREBASE CONFIG:", firebaseConfig);
 export const messaging = getMessaging(app);
-
-// export const requestNotificationPermission = async (api) => {
-//   try {
-//     const permission = await Notification.requestPermission();
-//     if (permission !== 'granted') return;
-
-//     const token = await getToken(messaging, {
-//       vapidKey: "BEnQ3_LMLjr2lWnpM09GORQ5YuGN0C6dHV6JRurIzRJUcG6viwif4-5FFGDU1nj-m2-S0CtJ2SNZ61n21EEfbDg",
-//     });
-
-//     if (token) {
-//       await api.post('/auth/fcm-token', { fcm_token: token });
-//       console.log('FCM token saved');
-//     }
-//   } catch (err) {
-//     console.error('Notification setup failed:', err);
-//   }
-// };
 
 export const onMessageListener = () =>
   new Promise((resolve) => {
@@ -55,7 +36,6 @@ export const onMessageListener = () =>
 
     if (token) {
       await api.post("/auth/fcm-token", { fcm_token: token });
-      console.log("FCM token saved");
     }
   } catch (err) {
     console.error("Notification setup failed:", err);
