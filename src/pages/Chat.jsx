@@ -588,12 +588,12 @@ const Chat = () => {
             </AnimatePresence>
 
             <div className="flex gap-2 items-center">
-              {/* When NOT recording and no blob: show mic button */}
-              {!recording && !audioBlob && (
+              {/* Mic button — calm mode only */}
+              {isCalm && !recording && !audioBlob && (
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={startRecording}
-                  disabled={sending || (isCalm && !connected)}
+                  disabled={sending || !connected}
                   className="rounded-full p-2 shrink-0 transition-colors bg-muted text-muted-foreground hover:bg-muted/80 disabled:opacity-40"
                   title="Tap to record"
                 >
@@ -601,8 +601,8 @@ const Chat = () => {
                 </motion.button>
               )}
 
-              {/* When recording: show cancel + indicator + STOP button */}
-              {recording && (
+              {/* Recording UI — calm mode only */}
+              {isCalm && recording && (
                 <>
                   {/* Cancel — discard without stopping */}
                   <motion.button
