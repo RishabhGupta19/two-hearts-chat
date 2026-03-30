@@ -15,31 +15,40 @@ const NicknameSetup = () => {
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    const nick = value.trim();
-    if (!nick) return;
-
-    setSaving(true);
-    setError('');
-    try {
-      await api.put('/auth/profile', { nickname: nick });
-      setNickname(nick);
-      navigate('/partner-linking');
-    } catch (err) {
-      console.error('Failed to save nickname:', err);
-      setError('Could not save — please try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSkip = async () => {
-    // Skip is optional — don't require a server roundtrip.
-    const fallback = userName || 'Friend';
-    setError('');
-    setNickname(fallback);
+  e.preventDefault();
+  const nick = value.trim();
+  if (!nick) return;
+  setSaving(true);
+  setError('');
+  try {
+    await api.put('/auth/profile', { nickname: nick });
+    setNickname(nick);
+    localStorage.setItem('onboarding_complete', 'true'); // ← add this
     navigate('/partner-linking');
-  };
+  } catch (err) {
+    setError('Could not save — please try again.');
+  } finally {
+    setSaving(false);
+  }
+};
+
+const handleSkip = async () => {
+  const fallback = userName || 'Friend';
+  setSaving(true);
+  try {
+    await api.put('/auth/profile', { nickname: fallback });
+    setNickname(fallback);
+    localStorage.setItem('onboarding_complete', 'true'); // ← add this
+    navigate('/partner-linking');
+  } catch {
+    setNickname(fallback);
+    localStorage.setItem('onboarding_complete', 'true'); // ← add this
+    navigate('/partner-linking');
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background px-6">

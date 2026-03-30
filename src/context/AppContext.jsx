@@ -122,7 +122,9 @@ export const AppProvider = ({ children }) => {
       userName: user.name || '',
       userEmail: user.email || '',
       userRole: user.role || null,
-      nickname: user.nickname || '',
+      // Prefer backend nickname, fall back to locally saved nickname to avoid
+      // re-prompting the user if the backend hasn't persisted it yet.
+      nickname: user.nickname || localStorage.getItem('nickname') || '',
       coupleId: user.couple_id || null,
       partnerName: user.partner_name || '',
       isLinked: user.is_linked || false,
@@ -166,6 +168,7 @@ export const AppProvider = ({ children }) => {
   const logout = useCallback(() => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('onboarding_complete');
     setState({ ...defaultState, loading: false });
   }, []);
 
@@ -196,6 +199,8 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const setNickname = useCallback((nickname) => {
+    // Persist to localStorage so the app can avoid asking again on next login
+   
     setState((s) => ({ ...s, nickname }));
   }, []);
 

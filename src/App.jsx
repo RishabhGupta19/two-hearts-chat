@@ -94,14 +94,16 @@ const AppRoutes = () => {
     );
   }
 
-  if (!nickname) {
-    return (
-      <Routes>
-        <Route path="/nickname" element={<NicknameSetup />} />
-        <Route path="*" element={<Navigate to="/nickname" replace />} />
-      </Routes>
-    );
-  }
+ const onboardingComplete = localStorage.getItem('onboarding_complete') === 'true';
+
+if (!nickname && !onboardingComplete) {
+  return (
+    <Routes>
+      <Route path="/nickname" element={<NicknameSetup />} />
+      <Route path="*" element={<Navigate to="/nickname" replace />} />
+    </Routes>
+  );
+}
 
   return (
     <Routes>
