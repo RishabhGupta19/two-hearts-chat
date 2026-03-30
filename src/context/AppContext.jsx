@@ -21,6 +21,7 @@ const defaultState = {
   coupleId: null,
   partnerName: '',
   isLinked: false,
+  onboardingComplete: false,
   assessmentCompleted: false,
   assessmentProfile: null,
   userProfilePic: localStorage.getItem('userProfilePic') || null,
@@ -98,44 +99,31 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const syncUserState = (user) => {
-    console.log('syncUserState received user:', user);
-    console.log('user.profile_picture_url:', user.profile_picture_url);
-    console.log('user.partner_profile_picture_url:', user.partner_profile_picture_url);
-    console.log('user.profile_pic_url:', user.profile_pic_url);
-    console.log('user.partner_profile_pic_url:', user.partner_profile_pic_url);
-    
-    // Try multiple possible field names
-    const userProfilePic = user.profile_picture_url || user.profile_pic_url || null;
-    const partnerProfilePic = user.partner_profile_picture_url || user.partner_profile_pic_url || null;
-    
-    console.log('Resolved userProfilePic:', userProfilePic);
-    console.log('Resolved partnerProfilePic:', partnerProfilePic);
-    
-    // Save profile pics to localStorage for persistence
-    if (userProfilePic) localStorage.setItem('userProfilePic', userProfilePic);
-    if (partnerProfilePic) localStorage.setItem('partnerProfilePic', partnerProfilePic);
-    
-    setState((s) => ({
-      ...s,
-      isAuthenticated: true,
-      user,
-      userName: user.name || '',
-      userEmail: user.email || '',
-      userRole: user.role || null,
-      // Prefer backend nickname, fall back to locally saved nickname to avoid
-      // re-prompting the user if the backend hasn't persisted it yet.
-      nickname: user.nickname || localStorage.getItem('nickname') || '',
-      coupleId: user.couple_id || null,
-      partnerName: user.partner_name || '',
-      isLinked: user.is_linked || false,
-      assessmentCompleted: user.assessment_completed || false,
-      assessmentProfile: user.assessment_profile || null,
-      // Use from backend if available, otherwise fall back to localStorage
-      userProfilePic: userProfilePic || s.userProfilePic || localStorage.getItem('userProfilePic'),
-      partnerProfilePic: partnerProfilePic || s.partnerProfilePic || localStorage.getItem('partnerProfilePic'),
-      loading: false,
-    }));
-  };
+  const userProfilePic = user.profile_picture_url || user.profile_pic_url || null;
+  const partnerProfilePic = user.partner_profile_picture_url || user.partner_profile_pic_url || null;
+
+  if (userProfilePic) localStorage.setItem('userProfilePic', userProfilePic);
+  if (partnerProfilePic) localStorage.setItem('partnerProfilePic', partnerProfilePic);
+
+  setState((s) => ({
+    ...s,
+    isAuthenticated: true,
+    user,
+    userName: user.name || '',
+    userEmail: user.email || '',
+    userRole: user.role || null,
+    nickname: user.nickname || localStorage.getItem('nickname') || '',
+    coupleId: user.couple_id || null,
+    partnerName: user.partner_name || '',
+    isLinked: user.is_linked || false,
+    assessmentCompleted: user.assessment_completed || false,
+    assessmentProfile: user.assessment_profile || null,
+    onboardingComplete: user.onboarding_complete || false,  // ← inside setState
+    userProfilePic: userProfilePic || s.userProfilePic || localStorage.getItem('userProfilePic'),
+    partnerProfilePic: partnerProfilePic || s.partnerProfilePic || localStorage.getItem('partnerProfilePic'),
+    loading: false,
+  }));
+};
 
   const fetchUser = async () => {
     try {
