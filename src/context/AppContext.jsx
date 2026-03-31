@@ -94,9 +94,9 @@ export const AppProvider = ({ children }) => {
     if (token) {
       // Fetch user and ensure notification permission + token registration
       (async () => {
-        await fetchUser();
+        const user = await fetchUser();
         try {
-          requestNotificationPermission(api);
+          requestNotificationPermission(api, user?.id);
         } catch (e) {
           console.warn('Failed to request notification permission on mount', e);
         }
@@ -141,7 +141,9 @@ export const AppProvider = ({ children }) => {
   const fetchUser = async () => {
     try {
       const { data } = await api.get('/auth/me');
-      syncUserState(data.user || data);
+      const user = data.user || data;
+      syncUserState(user);
+      return user;
     } catch {
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
@@ -153,16 +155,16 @@ export const AppProvider = ({ children }) => {
     const { data } = await api.post('/auth/register', { name, email, password });
     localStorage.setItem('access_token', data.access);
     localStorage.setItem('refresh_token', data.refresh);
-    await fetchUser();
-    requestNotificationPermission(api);
+    const user = await fetchUser();
+    requestNotificationPermission(api, user?.id);
   }, []);
 
   const login = useCallback(async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
     localStorage.setItem('access_token', data.access);
     localStorage.setItem('refresh_token', data.refresh);
-    await fetchUser();
-    requestNotificationPermission(api);
+    const user = await fetchUser();
+    requestNotificationPermission(api, user?.id);
   }, []);
 
   const logout = useCallback(() => {
