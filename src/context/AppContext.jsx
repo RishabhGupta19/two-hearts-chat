@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import api from '@/api';
 import { supabase } from '@/integrations/supabase/supabaseClient';
-import { requestNotificationPermission } from '@/firebase';
+import { requestNotificationPermission, subscribeToForegroundMessages } from '@/firebase';
 
 const AppContext = createContext(null);
 
@@ -92,7 +92,15 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (token) {
-      fetchUser();
+      // Fetch user and ensure notification permission + token registration
+      (async () => {
+        await fetchUser();
+        try {
+          requestNotificationPermission(api);
+        } catch (e) {
+          console.warn('Failed to request notification permission on mount', e);
+        }
+      })();
     } else {
       setState((s) => ({ ...s, loading: false }));
     }
@@ -306,6 +314,25 @@ export const AppProvider = ({ children }) => {
     } catch (e) {
       console.error('Failed to fetch messages:', e);
     }
+  }, []);
+
+  // Subscribe to foreground push messages and show a browser notification
+  useEffect(() => {
+    const unsubscribe = subscribeToForegroundMessages((payload) => {
+      try {
+        const title = payload?.notification?.title || payload?.data?.title || 'New message';
+        const body = payload?.notification?.body || payload?.data?.body || '';
+        if (Notification.permission === 'granted') {
+          new Notification(title, { body, icon: '/icon-192.png' });
+        }
+      } catch (err) {
+        console.error('Error showing foreground notification', err);
+      }
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
   }, []);
 
   const sendMessage = useCallback(async (text) => {

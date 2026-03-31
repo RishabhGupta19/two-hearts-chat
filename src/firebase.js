@@ -37,6 +37,16 @@ export const onMessageListener = () =>
   new Promise((resolve) => {
     onMessage(messaging, (payload) => resolve(payload));
   });
+
+// Subscribe to foreground messages. Pass a callback that receives the payload.
+export const subscribeToForegroundMessages = (cb) => {
+  try {
+    return onMessage(messaging, (payload) => cb(payload));
+  } catch (err) {
+    console.error('Failed to subscribe to foreground messages', err);
+    return () => {};
+  }
+};
   export const requestNotificationPermission = async (api) => {
   try {
     const permission = await Notification.requestPermission();
@@ -53,9 +63,14 @@ export const onMessageListener = () =>
       serviceWorkerRegistration: registration,
     });
 
+      console.log('FCM token retrieved (frontend):', token);
+      console.log('Service worker registration used for token:', registration?.scope || registration);
+
     if (token) {
-      await api.post("/auth/fcm-token", { fcm_token: token });
-      console.log("FCM token saved");
+        console.log('Sending FCM token to backend:', token);
+        const resp = await api.post("/auth/fcm-token", { fcm_token: token });
+        console.log('Backend response saving token:', resp?.data || resp);
+        console.log("FCM token saved (server acknowledged)");
     }
   } catch (err) {
     console.error("Notification setup failed:", err);
