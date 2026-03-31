@@ -27,7 +27,7 @@ const queryClient = new QueryClient();
 
 const AppRoutes = () => {
   const { isAuthenticated, userRole, assessmentCompleted,onboardingComplete, nickname, isLinked, loading } = useApp();
-  useFirebaseForegroundMessages();
+  
 
   if (loading) {
     return (
