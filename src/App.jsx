@@ -56,7 +56,7 @@ const useFirebaseForegroundMessages = () => {
 };
 
 const AppRoutes = () => {
-  const { isAuthenticated, userRole, assessmentCompleted, nickname, isLinked, loading } = useApp();
+  const { isAuthenticated, userRole, assessmentCompleted,onboardingComplete, nickname, isLinked, loading } = useApp();
   useFirebaseForegroundMessages();
 
   if (loading) {
@@ -93,9 +93,9 @@ const AppRoutes = () => {
     );
   }
 
- const onboardingComplete = localStorage.getItem('onboarding_complete') === 'true';
 
-if (!nickname && !onboardingComplete) {
+
+if (!onboardingComplete) {
   return (
     <Routes>
       <Route path="/nickname" element={<NicknameSetup />} />
