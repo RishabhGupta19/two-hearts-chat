@@ -5,8 +5,6 @@ import { Toaster as Sonner, toast } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider, useApp } from "@/context/AppContext";
-import { onMessage } from "firebase/messaging";
-import { messaging } from "@/firebase";
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
 import Assessment from "./pages/Assessment";
@@ -25,35 +23,7 @@ import { Loader2 } from "lucide-react";
 const queryClient = new QueryClient();
 
 
-const useFirebaseForegroundMessages = () => {
-  useEffect(() => {
-    const unsubscribe = onMessage(messaging, (payload) => {
-
-      const title =
-        payload.notification?.title ||
-        payload.data?.title ||
-        "New Message";
-
-      const body =
-        payload.notification?.body ||
-        payload.data?.body ||
-        "";
-
-      // Toast
-      toast(title, { description: body });
-
-      // System notification
-      if (Notification.permission === "granted") {
-        new Notification(title, {
-          body,
-          icon: "/icon-192.png",
-        });
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-};
+// Foreground push handling is centralized in AppContext via subscribeToForegroundMessages
 
 const AppRoutes = () => {
   const { isAuthenticated, userRole, assessmentCompleted,onboardingComplete, nickname, isLinked, loading } = useApp();
