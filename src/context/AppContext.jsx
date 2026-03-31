@@ -328,8 +328,9 @@ export const AppProvider = ({ children }) => {
       try {
         const title = payload?.notification?.title || payload?.data?.title || 'New message';
         const body = payload?.notification?.body || payload?.data?.body || '';
+        const messageId = payload?.data?.message_id || payload?.data?.messageId || payload?.messageId || Date.now().toString();
         if (Notification.permission === 'granted') {
-          new Notification(title, { body, icon: '/icon-192.png' });
+          new Notification(title, { body, icon: '/icon-192.png', tag: messageId, renotify: false, badge: '/badge-72.png' });
         }
       } catch (err) {
         console.error('Error showing foreground notification', err);

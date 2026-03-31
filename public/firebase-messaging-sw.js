@@ -11,17 +11,31 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
-messaging.onBackgroundMessage((payload) => {
+messaging.onBackgroundMessage(async (payload) => {
   console.log("Background message:", payload);
+  const title = payload.notification?.title || payload.data?.title || "New Message";
+  const body = payload.notification?.body || payload.data?.body || "";
+  const messageId = payload?.data?.message_id || payload?.data?.messageId || payload?.messageId || Date.now().toString();
 
-  const title =
-    payload.notification?.title || payload.data?.title || "New Message";
-
-  const body =
-    payload.notification?.body || payload.data?.body || "";
-
-  self.registration.showNotification(title, {
+  const options = {
     body,
     icon: "/icon-192.png",
-  });
+    tag: messageId,
+    renotify: false,
+    // badge can be provided for platforms that support it
+    badge: "/badge-72.png",
+  };
+
+  // Close any existing notifications with the same tag before showing
+  try {
+    const existing = await self.registration.getNotifications({ tag: messageId });
+    if (existing && existing.length) {
+      console.log(`Closing ${existing.length} existing notification(s) with tag ${messageId}`);
+      existing.forEach((n) => n.close());
+    }
+  } catch (err) {
+    console.warn('Error checking existing notifications for dedupe', err);
+  }
+
+  self.registration.showNotification(title, options);
 });
