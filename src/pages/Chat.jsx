@@ -208,7 +208,18 @@ const Chat = () => {
 
   // Send seen acknowledgement when partner messages arrive
   useEffect(() => {
+    // Only mark messages as seen when the user actually has the chat open
+    // and the tab/window is visible and focused. Do NOT mark seen from
+    // background/onMessage handlers.
     if (!connected || !isCalm) return;
+    try {
+      if (typeof document === 'undefined') return;
+      if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+    } catch (e) {
+      // conservative: if any error, avoid marking seen
+      return;
+    }
+
     const unseenPartnerMsgIds = currentMessages
       .filter(m => !m.isMine && !seenMessageIds.has(m.id))
       .map(m => m.id)
