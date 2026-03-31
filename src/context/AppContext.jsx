@@ -21,7 +21,7 @@ const defaultState = {
   coupleId: null,
   partnerName: '',
   isLinked: false,
-  onboardingComplete: false,
+  onboardingComplete: (typeof localStorage !== 'undefined' && localStorage.getItem('onboarding_complete') === 'true') || false,
   assessmentCompleted: false,
   assessmentProfile: null,
   userProfilePic: localStorage.getItem('userProfilePic') || null,
@@ -94,9 +94,9 @@ export const AppProvider = ({ children }) => {
     if (token) {
       // Fetch user and ensure notification permission + token registration
       (async () => {
-        await fetchUser();
+        const user = await fetchUser();
         try {
-          requestNotificationPermission(api);
+          requestNotificationPermission(api, user?.id);
         } catch (e) {
           console.warn('Failed to request notification permission on mount', e);
         }
@@ -124,6 +124,8 @@ export const AppProvider = ({ children }) => {
       // Prefer backend nickname, fall back to locally saved nickname to avoid
       // re-prompting the user if the backend hasn't persisted it yet.
       nickname: user.nickname || localStorage.getItem('nickname') || '',
+      // Respect backend onboarding flag, fall back to locally stored flag
+      onboardingComplete: user.onboarding_complete || localStorage.getItem('onboarding_complete') === 'true',
       coupleId: user.couple_id || null,
       partnerName: user.partner_name || '',
       isLinked: user.is_linked || false,
@@ -139,7 +141,9 @@ export const AppProvider = ({ children }) => {
   const fetchUser = async () => {
     try {
       const { data } = await api.get('/auth/me');
-      syncUserState(data.user || data);
+      const user = data.user || data;
+      syncUserState(user);
+      return user;
     } catch {
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
@@ -151,16 +155,16 @@ export const AppProvider = ({ children }) => {
     const { data } = await api.post('/auth/register', { name, email, password });
     localStorage.setItem('access_token', data.access);
     localStorage.setItem('refresh_token', data.refresh);
-    await fetchUser();
-    requestNotificationPermission(api);
+    const user = await fetchUser();
+    requestNotificationPermission(api, user?.id);
   }, []);
 
   const login = useCallback(async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
     localStorage.setItem('access_token', data.access);
     localStorage.setItem('refresh_token', data.refresh);
-    await fetchUser();
-    requestNotificationPermission(api);
+    const user = await fetchUser();
+    requestNotificationPermission(api, user?.id);
   }, []);
 
   const logout = useCallback(() => {
@@ -199,7 +203,19 @@ export const AppProvider = ({ children }) => {
   const setNickname = useCallback((nickname) => {
     // Persist to localStorage so the app can avoid asking again on next login
    
-    setState((s) => ({ ...s, nickname }));
+    try {
+      localStorage.setItem('nickname', nickname);
+    } catch (e) {
+      // ignore storage errors
+    }
+
+    try {
+      localStorage.setItem('onboarding_complete', 'true');
+    } catch (e) {
+      // ignore
+    }
+
+    setState((s) => ({ ...s, nickname, onboardingComplete: true }));
   }, []);
 
   const updateProfilePic = useCallback(async (file) => {
@@ -312,8 +328,9 @@ export const AppProvider = ({ children }) => {
       try {
         const title = payload?.notification?.title || payload?.data?.title || 'New message';
         const body = payload?.notification?.body || payload?.data?.body || '';
+        const messageId = payload?.data?.message_id || payload?.data?.messageId || payload?.messageId || Date.now().toString();
         if (Notification.permission === 'granted') {
-          new Notification(title, { body, icon: '/icon-192.png' });
+          new Notification(title, { body, icon: '/icon-192.png', tag: messageId, renotify: false, badge: '/badge-72.png' });
         }
       } catch (err) {
         console.error('Error showing foreground notification', err);

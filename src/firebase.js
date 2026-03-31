@@ -28,7 +28,7 @@ export const subscribeToForegroundMessages = (cb) => {
     return () => {};
   }
 };
-  export const requestNotificationPermission = async (api) => {
+  export const requestNotificationPermission = async (api, userId = null) => {
   try {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return;
@@ -48,10 +48,14 @@ export const subscribeToForegroundMessages = (cb) => {
       console.log('Service worker registration used for token:', registration?.scope || registration);
 
     if (token) {
-        console.log('Sending FCM token to backend:', token);
-        const resp = await api.post("/auth/fcm-token", { fcm_token: token });
-        console.log('Backend response saving token:', resp?.data || resp);
-        console.log("FCM token saved (server acknowledged)");
+      console.log('Sending FCM token to backend:', token, 'userId:', userId);
+      // Include user id in the payload when available so backend can
+      // accurately associate the device token with the correct user.
+      const payload = { fcm_token: token };
+      if (userId) payload.user_id = userId;
+      const resp = await api.post("/auth/fcm-token", payload);
+      console.log('Backend response saving token:', resp?.data || resp);
+      console.log("FCM token saved (server acknowledged)");
     }
   } catch (err) {
     console.error("Notification setup failed:", err);
