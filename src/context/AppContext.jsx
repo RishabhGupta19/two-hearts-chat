@@ -21,7 +21,7 @@ const defaultState = {
   coupleId: null,
   partnerName: '',
   isLinked: false,
-  onboardingComplete: false,
+  onboardingComplete: (typeof localStorage !== 'undefined' && localStorage.getItem('onboarding_complete') === 'true') || false,
   assessmentCompleted: false,
   assessmentProfile: null,
   userProfilePic: localStorage.getItem('userProfilePic') || null,
@@ -124,6 +124,8 @@ export const AppProvider = ({ children }) => {
       // Prefer backend nickname, fall back to locally saved nickname to avoid
       // re-prompting the user if the backend hasn't persisted it yet.
       nickname: user.nickname || localStorage.getItem('nickname') || '',
+      // Respect backend onboarding flag, fall back to locally stored flag
+      onboardingComplete: user.onboarding_complete || localStorage.getItem('onboarding_complete') === 'true',
       coupleId: user.couple_id || null,
       partnerName: user.partner_name || '',
       isLinked: user.is_linked || false,
@@ -199,7 +201,19 @@ export const AppProvider = ({ children }) => {
   const setNickname = useCallback((nickname) => {
     // Persist to localStorage so the app can avoid asking again on next login
    
-    setState((s) => ({ ...s, nickname }));
+    try {
+      localStorage.setItem('nickname', nickname);
+    } catch (e) {
+      // ignore storage errors
+    }
+
+    try {
+      localStorage.setItem('onboarding_complete', 'true');
+    } catch (e) {
+      // ignore
+    }
+
+    setState((s) => ({ ...s, nickname, onboardingComplete: true }));
   }, []);
 
   const updateProfilePic = useCallback(async (file) => {
