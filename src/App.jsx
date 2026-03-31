@@ -28,7 +28,6 @@ const queryClient = new QueryClient();
 const useFirebaseForegroundMessages = () => {
   useEffect(() => {
     const unsubscribe = onMessage(messaging, (payload) => {
-      console.log("Foreground message:", payload);
 
       const title =
         payload.notification?.title ||
@@ -141,7 +140,6 @@ const App = () => {
       navigator.serviceWorker
         .register("/firebase-messaging-sw.js")
         .then((registration) => {
-          console.log("SW registered:", registration);
         })
         .catch((err) => {
           console.error("SW registration failed:", err);

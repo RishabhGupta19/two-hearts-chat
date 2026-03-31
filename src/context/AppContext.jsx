@@ -107,36 +107,38 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const syncUserState = (user) => {
-  const userProfilePic = user.profile_picture_url || user.profile_pic_url || null;
-  const partnerProfilePic = user.partner_profile_picture_url || user.partner_profile_pic_url || null;
-
-  if (userProfilePic) localStorage.setItem('userProfilePic', userProfilePic);
-  if (partnerProfilePic) localStorage.setItem('partnerProfilePic', partnerProfilePic);
-
-  setState((s) => ({
-    ...s,
-    isAuthenticated: true,
-    user,
-    userName: user.name || '',
-    userEmail: user.email || '',
-    userRole: user.role || null,
-    nickname: user.nickname || localStorage.getItem('nickname') || '',
-    coupleId: user.couple_id || null,
-    partnerName: user.partner_name || '',
-    isLinked: user.is_linked || false,
-    assessmentCompleted: user.assessment_completed || false,
-    assessmentProfile: user.assessment_profile || null,
-    onboardingComplete: user.onboarding_complete || false,  // ← inside setState
-    userProfilePic: userProfilePic || s.userProfilePic || localStorage.getItem('userProfilePic'),
-    partnerProfilePic: partnerProfilePic || s.partnerProfilePic || localStorage.getItem('partnerProfilePic'),
-    loading: false,
-  }));
-};
+    const userProfilePic = user.profile_picture_url || user.profile_pic_url || null;
+    const partnerProfilePic = user.partner_profile_picture_url || user.partner_profile_pic_url || null;
+    
+    // Save profile pics to localStorage for persistence
+    if (userProfilePic) localStorage.setItem('userProfilePic', userProfilePic);
+    if (partnerProfilePic) localStorage.setItem('partnerProfilePic', partnerProfilePic);
+    
+    setState((s) => ({
+      ...s,
+      isAuthenticated: true,
+      user,
+      userName: user.name || '',
+      userEmail: user.email || '',
+      userRole: user.role || null,
+      // Prefer backend nickname, fall back to locally saved nickname to avoid
+      // re-prompting the user if the backend hasn't persisted it yet.
+      nickname: user.nickname || localStorage.getItem('nickname') || '',
+      coupleId: user.couple_id || null,
+      partnerName: user.partner_name || '',
+      isLinked: user.is_linked || false,
+      assessmentCompleted: user.assessment_completed || false,
+      assessmentProfile: user.assessment_profile || null,
+      // Use from backend if available, otherwise fall back to localStorage
+      userProfilePic: userProfilePic || s.userProfilePic || localStorage.getItem('userProfilePic'),
+      partnerProfilePic: partnerProfilePic || s.partnerProfilePic || localStorage.getItem('partnerProfilePic'),
+      loading: false,
+    }));
+  };
 
   const fetchUser = async () => {
     try {
       const { data } = await api.get('/auth/me');
-      console.log('fetchUser raw response:', data);
       syncUserState(data.user || data);
     } catch {
       localStorage.removeItem('access_token');
@@ -208,9 +210,6 @@ export const AppProvider = ({ children }) => {
       const fileName = `${timestamp}-${random}-${file.name}`;
       const filePath = `profile_pics/${state.user?.id || 'unknown'}/${fileName}`;
 
-      console.log('Uploading profile pic to:', filePath);
-
-      // Upload to Supabase Storage
       const { data, error: uploadError } = await supabase.storage
         .from('gallery')
         .upload(filePath, file);
@@ -220,22 +219,16 @@ export const AppProvider = ({ children }) => {
         throw uploadError;
       }
 
-      console.log('Upload successful:', data);
-
-      // Get public URL
       const { data: urlData } = supabase.storage
         .from('gallery')
         .getPublicUrl(filePath);
 
       const imageUrl = urlData.publicUrl;
-      console.log('Generated public URL:', imageUrl);
-
       // Save to localStorage for persistence
       localStorage.setItem('userProfilePic', imageUrl);
 
       // Update state immediately with the new profile picture
       setState((s) => {
-        console.log('Updating state with userProfilePic:', imageUrl);
         return {
           ...s,
           userProfilePic: imageUrl,
@@ -247,10 +240,7 @@ export const AppProvider = ({ children }) => {
         const { data: profileData } = await api.put('/auth/profile', {
           profile_pic_url: imageUrl,
         });
-        console.log('Backend response:', profileData);
-        // If backend returns updated user, sync it
         if (profileData?.user || profileData?.profile_pic_url || profileData?.profile_picture_url) {
-          console.log('Syncing user state from backend response');
           syncUserState(profileData.user || profileData);
         }
       } catch (backendErr) {

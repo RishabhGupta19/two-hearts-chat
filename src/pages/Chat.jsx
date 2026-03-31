@@ -5,13 +5,17 @@ import { useApp } from '@/context/AppContext';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { ModeToggle } from '@/components/ModeToggle';
 import { ChatBubble } from '@/components/ChatBubble';
+import { VoiceBubble } from '@/components/VoiceBubble';
+import { DateSeparator, toISTDateKey, formatDateLabel } from '@/components/DateSeparator';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { ResolutionModal } from '@/components/ResolutionModal';
 import { Input } from '@/components/ui/input';
 import { ModeWrapper } from '@/components/ModeWrapper';
-import { Loader2, Link2Off, ArrowLeft } from 'lucide-react';
+import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
+import { Loader2, Link2Off, ArrowLeft, Mic, MicOff, X, Send, Play, Pause } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyError } from '@/utils/errorMessages';
+import api from '@/api';
 
 const VENT_BANNER_SEEN_KEY = 'solace_vent_banner_seen';
 
@@ -45,6 +49,86 @@ const Chat = () => {
   const [pendingMode, setPendingMode] = useState(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [goalConfirmation, setGoalConfirmation] = useState('');
+  const [sendingVoice, setSendingVoice] = useState(false);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [previewProgress, setPreviewProgress] = useState(0);
+  const [previewCurrentTime, setPreviewCurrentTime] = useState(0);
+  const previewAudioRef = useRef(null);
+  const previewAnimRef = useRef(null);
+
+  const { recording, audioBlob, duration, startRecording, stopRecording, cancelRecording, setAudioBlob } = useVoiceRecorder();
+
+  const fmtDuration = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  // Create / revoke blob URL for preview — must be STATE so re-render gives audio element the src
+  const [previewSrc, setPreviewSrc] = useState(null);
+  const prevPreviewSrc = useRef(null);  // track for cleanup only
+  useEffect(() => {
+    if (audioBlob) {
+      const url = URL.createObjectURL(audioBlob);
+      prevPreviewSrc.current = url;
+      setPreviewSrc(url);
+      setPreviewProgress(0);
+      setPreviewCurrentTime(0);
+      setPreviewPlaying(false);
+    } else {
+      if (prevPreviewSrc.current) {
+        URL.revokeObjectURL(prevPreviewSrc.current);
+        prevPreviewSrc.current = null;
+      }
+      setPreviewSrc(null);
+      setPreviewPlaying(false);
+      setPreviewProgress(0);
+      setPreviewCurrentTime(0);
+      cancelAnimationFrame(previewAnimRef.current);
+    }
+  }, [audioBlob]);
+
+  const tickPreview = useCallback(() => {
+    const audio = previewAudioRef.current;
+    if (!audio) return;
+    const pct = audio.duration ? audio.currentTime / audio.duration : 0;
+    setPreviewProgress(pct);
+    setPreviewCurrentTime(audio.currentTime);
+    if (!audio.paused) {
+      previewAnimRef.current = requestAnimationFrame(tickPreview);
+    }
+  }, []);
+
+  const togglePreviewPlay = useCallback(() => {
+    const audio = previewAudioRef.current;
+    if (!audio) return;
+    if (previewPlaying) {
+      audio.pause();
+      cancelAnimationFrame(previewAnimRef.current);
+      setPreviewPlaying(false);
+    } else {
+      audio.play();
+      setPreviewPlaying(true);
+      previewAnimRef.current = requestAnimationFrame(tickPreview);
+    }
+  }, [previewPlaying, tickPreview]);
+
+  const handleSendVoice = useCallback(async () => {
+    if (!audioBlob) return;
+    setSendingVoice(true);
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'voice.webm');
+      formData.append('duration', String(duration));
+      formData.append('mode', mode);
+      const { data: voiceMsg } = await api.post('/messages/voice', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      // addWsMessage normalizes and adds message to state
+      addWsMessage({ ...voiceMsg, isMine: true });
+      setAudioBlob(null);
+    } catch (e) {
+      toast.error('Failed to send voice message');
+    } finally {
+      setSendingVoice(false);
+    }
+  }, [audioBlob, duration, mode, addWsMessage, setAudioBlob]);
 
   // ✅ 1. seenMessageIds state first
   const [seenMessageIds, setSeenMessageIds] = useState(() => {
@@ -76,7 +160,7 @@ const Chat = () => {
       newIds.forEach(id => updated.add(id));
       try {
         localStorage.setItem(`seen_${coupleId}`, JSON.stringify([...updated]));
-      } catch {}
+      } catch { }
       return updated;
     });
   }, [coupleId]);
@@ -204,6 +288,27 @@ const Chat = () => {
     setShowModeConfirm(false);
     setPendingMode(null);
   };
+  // In Chat.jsx — send voice message
+  const sendVoiceMessage = async (blob) => {
+    const formData = new FormData();
+    formData.append('audio', blob, 'voice.webm');
+    formData.append('couple_id', coupleId);
+
+    const { data } = await api.post('/messages/voice', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+
+    // Notify partner via WebSocket
+    wsSend({
+      type: 'voice_message',
+      message_id: data.id,
+      audio_url: data.audio_url,
+      duration: data.duration,
+      sender_id: user.id,
+      sender_name: userName,
+      timestamp: data.timestamp,
+    });
+  };
 
   const showNotLinkedMessage = isCalm && !isLinked;
 
@@ -248,7 +353,7 @@ const Chat = () => {
           </div>
         </header>
 
-      
+
 
         <div
           data-pull-scroll
@@ -291,14 +396,39 @@ const Chat = () => {
                   </div>
                 </div>
               )}
-              {currentMessages.map((msg, i) => (
-                <ChatBubble
-                  key={msg.id || i}
-                  message={msg}
-                  index={i}
-                  seen={seenMessageIds.has(msg.id)}
-                />
-              ))}
+              {currentMessages.map((msg, i) => {
+                const ts = msg.timestamp;
+                const dateKey = ts ? toISTDateKey(ts) : null;
+                const prevTs  = i > 0 ? currentMessages[i - 1].timestamp : null;
+                const prevKey = prevTs ? toISTDateKey(prevTs) : null;
+                const showSep = dateKey && dateKey !== prevKey;
+
+                const bubble = msg.type === 'voice' || msg.audio_url ? (
+                  <VoiceBubble
+                    key={msg.id || i}
+                    message={msg}
+                    isMine={msg.isMine}
+                    seen={seenMessageIds.has(msg.id)}
+                    isCalm={isCalm}
+                  />
+                ) : (
+                  <ChatBubble
+                    key={msg.id || i}
+                    message={msg}
+                    index={i}
+                    seen={seenMessageIds.has(msg.id)}
+                  />
+                );
+
+                return (
+                  <div key={`grp-${msg.id || i}`}>
+                    {showSep && (
+                      <DateSeparator label={formatDateLabel(dateKey)} />
+                    )}
+                    {bubble}
+                  </div>
+                );
+              })}
               <AnimatePresence>
                 {sending && <TypingIndicator label="Luna" />}
                 {isCalm && partnerTyping && <TypingIndicator label={partnerName || 'Partner'} />}
@@ -325,11 +455,10 @@ const Chat = () => {
                   <button
                     key={tag}
                     onClick={() => setSelectedTag(tag)}
-                    className={`rounded-pill px-3 py-1 text-xs font-body border transition-colors ${
-                      selectedTag === tag
+                    className={`rounded-pill px-3 py-1 text-xs font-body border transition-colors ${selectedTag === tag
                         ? 'border-primary bg-primary/10 text-foreground'
                         : 'border-border text-muted-foreground'
-                    }`}
+                      }`}
                   >
                     {emoji} {tag.charAt(0).toUpperCase() + tag.slice(1)}
                   </button>
@@ -383,27 +512,155 @@ const Chat = () => {
                 {showGoalInput ? '− Hide goal setter' : '+ Set a Goal for Today'}
               </button>
             )}
+            {/* Voice recording preview bar */}
+            <AnimatePresence>
+              {audioBlob && !recording && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex items-center gap-2 mb-2 bg-primary/10 rounded-xl px-3 py-2"
+                >
+                  {/* hidden audio element for preview playback */}
+                  <audio
+                    ref={previewAudioRef}
+                    src={previewSrc}
+                    onEnded={() => {
+                      setPreviewPlaying(false);
+                      setPreviewProgress(0);
+                      setPreviewCurrentTime(0);
+                      cancelAnimationFrame(previewAnimRef.current);
+                    }}
+                  />
+
+                  {/* Play / Pause preview */}
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={togglePreviewPlay}
+                    className="shrink-0 w-8 h-8 rounded-full bg-primary/20 hover:bg-primary/30 flex items-center justify-center text-primary transition-colors"
+                  >
+                    {previewPlaying
+                      ? <Pause size={14} className="fill-current" />
+                      : <Play size={14} className="ml-0.5 fill-current" />}
+                  </motion.button>
+
+                  {/* Live waveform with progress */}
+                  <div className="flex items-center gap-[2px] flex-1 h-6">
+                    {Array.from({ length: 28 }).map((_, i) => {
+                      const active = (i / 28) <= previewProgress;
+                      return (
+                        <div
+                          key={i}
+                          className="rounded-full transition-colors duration-75"
+                          style={{
+                            width: 2.5,
+                            height: `${30 + (i * 7) % 60}%`,
+                            backgroundColor: active ? 'var(--primary)' : 'color-mix(in srgb, var(--primary) 30%, transparent)',
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {/* time / total */}
+                  <span className="text-[11px] font-medium text-muted-foreground tabular-nums shrink-0">
+                    {previewPlaying ? fmtDuration(previewCurrentTime) : fmtDuration(duration)}
+                  </span>
+
+                  {/* Discard */}
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => { cancelRecording(); }}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X size={15} />
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleSendVoice}
+                    disabled={sendingVoice}
+                    className="rounded-full bg-primary p-1.5 text-primary-foreground disabled:opacity-50"
+                  >
+                    {sendingVoice ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                  </motion.button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="flex gap-2 items-center">
-              <Input
-                value={input}
-                onChange={handleInputChange}
-                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder={
-                  isVent
-                    ? "What's on your mind? Let it out..."
-                    : `Message ${partnerName || 'your partner'}...`
-                }
-                className="rounded-[12px] text-sm flex-1 min-w-0"
-                disabled={sending || (isCalm && !connected)}
-              />
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={handleSend}
-                disabled={sending || (isCalm && !connected)}
-                className="rounded-pill bg-primary px-4 py-2 text-sm text-primary-foreground font-medium shadow-soft hover:bg-primary/90 transition-colors flex items-center justify-center shrink-0 disabled:opacity-50"
-              >
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
-              </motion.button>
+              {/* Mic button — calm mode only */}
+              {isCalm && !recording && !audioBlob && (
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  onClick={startRecording}
+                  disabled={sending || !connected}
+                  className="rounded-full p-2 shrink-0 transition-colors bg-muted text-muted-foreground hover:bg-muted/80 disabled:opacity-40"
+                  title="Tap to record"
+                >
+                  <Mic size={18} />
+                </motion.button>
+              )}
+
+              {/* Recording UI — calm mode only */}
+              {isCalm && recording && (
+                <>
+                  {/* Cancel — discard without stopping */}
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={cancelRecording}
+                    className="rounded-full p-2 shrink-0 text-muted-foreground hover:text-foreground"
+                    title="Cancel recording"
+                  >
+                    <X size={18} />
+                  </motion.button>
+
+                  {/* Live timer */}
+                  <div className="flex items-center gap-1.5 flex-1">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                    <span className="text-xs text-muted-foreground font-medium tabular-nums">
+                      {fmtDuration(duration)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">Recording…</span>
+                  </div>
+
+                  {/* STOP — stops and shows preview */}
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={stopRecording}
+                    className="rounded-full w-9 h-9 shrink-0 bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md"
+                    title="Stop recording"
+                  >
+                    {/* filled square = stop icon */}
+                    <span className="w-3.5 h-3.5 rounded-sm bg-white block" />
+                  </motion.button>
+                </>
+              )}
+
+
+              {!recording && (
+                <>
+                  <Input
+                    value={input}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                    placeholder={
+                      isVent
+                        ? "What's on your mind? Let it out..."
+                        : `Message ${partnerName || 'your partner'}...`
+                    }
+                    className="rounded-[12px] text-sm flex-1 min-w-0"
+                    disabled={sending || (isCalm && !connected) || !!audioBlob}
+                  />
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={handleSend}
+                    disabled={sending || (isCalm && !connected) || !!audioBlob}
+                    className="rounded-pill bg-primary px-4 py-2 text-sm text-primary-foreground font-medium shadow-soft hover:bg-primary/90 transition-colors flex items-center justify-center shrink-0 disabled:opacity-50"
+                  >
+                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
+                  </motion.button>
+                </>
+              )}
             </div>
           </div>
         )}
