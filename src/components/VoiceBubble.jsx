@@ -16,6 +16,7 @@ export const VoiceBubble = ({ message, isMine, seen, isCalm }) => {
   const [progress, setProgress]     = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [canPlay, setCanPlay]       = useState(false);
+  const [isPriming, setIsPriming]   = useState(false);
   const [error, setError]           = useState(false);
 
   const audioRef  = useRef(null);
@@ -69,17 +70,21 @@ export const VoiceBubble = ({ message, isMine, seen, isCalm }) => {
     }
 
     try {
+      setIsPriming(true);
       await audio.play();
       // Broadcast to all other VoiceBubbles to pause
       document.dispatchEvent(
         new CustomEvent('voicebubble:play', { detail: { id: message?.id } })
       );
+      setCanPlay(true);
       setPlaying(true);
       animRef.current = requestAnimationFrame(tick);
     } catch (err) {
       console.error('VoiceBubble play failed:', err);
       setError(true);
       setPlaying(false);
+    } finally {
+      setIsPriming(false);
     }
   }, [playing, tick, message?.id]);
 
@@ -88,11 +93,16 @@ export const VoiceBubble = ({ message, isMine, seen, isCalm }) => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const onEnded   = () => { cancelAnimationFrame(animRef.current); setPlaying(false); setProgress(0); setCurrentTime(0); };
+    // If metadata is already available (cached response), avoid a stuck loading UI.
+    if (audio.readyState >= 2) {
+      setCanPlay(true);
+    }
+
+    const onEnded   = () => { cancelAnimationFrame(animRef.current); setPlaying(false); setProgress(0); setCurrentTime(0); setIsPriming(false); };
     const onCanPlay = () => setCanPlay(true);
-    const onError   = () => { setError(true); setCanPlay(false); };
+    const onError   = () => { setError(true); setCanPlay(false); setIsPriming(false); };
     const onPlay    = () => setPlaying(true);
-    const onPause   = () => { setPlaying(false); cancelAnimationFrame(animRef.current); };
+    const onPause   = () => { setPlaying(false); setIsPriming(false); cancelAnimationFrame(animRef.current); };
 
     // Pause THIS bubble when another one broadcasts 'voicebubble:play'
     const onOtherPlay = (e) => {
@@ -190,7 +200,7 @@ export const VoiceBubble = ({ message, isMine, seen, isCalm }) => {
         {/* Play / Pause — always visible */}
         <button
           onClick={togglePlay}
-          disabled={!audioUrl || error || (!canPlay && !playing)}
+          disabled={!audioUrl || error}
           className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
             isMine
               ? 'bg-white/30 hover:bg-white/45 active:bg-white/55 text-primary-foreground'
@@ -200,8 +210,8 @@ export const VoiceBubble = ({ message, isMine, seen, isCalm }) => {
         >
           {error ? (
             <span className="text-[10px]">✕</span>
-          ) : !canPlay && audioUrl ? (
-            // tiny spinner while audio loads
+          ) : isPriming ? (
+            // tiny spinner only while a play action is actively priming
             <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin block" />
           ) : playing ? (
             <Pause size={14} className="fill-current" />

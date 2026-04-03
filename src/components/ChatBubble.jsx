@@ -1,16 +1,14 @@
-import { motion, useMotionValue, useAnimation } from 'framer-motion';
+import { useRef } from 'react';
+import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
-
-/** Threshold (px) the user must drag before reply triggers */
-const SWIPE_THRESHOLD = 60;
+import { Reply } from 'lucide-react';
 
 export const ChatBubble = ({ message, index, seen, onReply }) => {
   const { user, mode, partnerName } = useApp();
-  const controls = useAnimation();
-  const dragX = useMotionValue(0);
+  const longPressTimerRef = useRef(null);
 
   const isAI = message.sender === 'ai';
-  const isCalm = mode === 'calm';
+  const isCalm = mode === 'calm';  // ← add this
 
   const isMine = isAI
     ? false
@@ -29,45 +27,34 @@ export const ChatBubble = ({ message, index, seen, onReply }) => {
   const replySender = message?.reply_to?.sender_name || 'Message';
   const replyText = message?.reply_to?.text || '';
 
-  const canReply = !!onReply && mode === 'calm' && !isAI;
-
-  // For sent messages: drag left (negative x) → reply
-  // For received messages: drag right (positive x) → reply
-  const dragConstraints = isMine
-    ? { left: -SWIPE_THRESHOLD * 1.5, right: 0 }
-    : { left: 0, right: SWIPE_THRESHOLD * 1.5 };
-
-
-
-  const handleDragEnd = async (_e, info) => {
-    const offset = info.offset.x;
-    const triggered = isMine ? offset < -SWIPE_THRESHOLD : offset > SWIPE_THRESHOLD;
-
-    // Snap back regardless
-    await controls.start({ x: 0, transition: { type: 'spring', stiffness: 500, damping: 30 } });
-
-    if (triggered) {
-      onReply?.(message);
-    }
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: Math.min(index, 4) * 0.02 }}
       className={`mb-3 flex w-full ${isMine ? 'justify-end pr-1' : 'justify-start pl-1'}`}
+      onContextMenu={(e) => {
+        if (!onReply || mode !== 'calm' || isAI) return;
+        e.preventDefault();
+        onReply(message);
+      }}
+      onDoubleClick={() => {
+        if (!onReply || mode !== 'calm' || isAI) return;
+        onReply(message);
+      }}
+      onTouchStart={() => {
+        if (!onReply || mode !== 'calm' || isAI) return;
+        longPressTimerRef.current = setTimeout(() => onReply(message), 360);
+      }}
+      onTouchEnd={() => {
+        if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+      }}
+      onTouchCancel={() => {
+        if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+      }}
     >
-
-      {/* Swipeable bubble */}
-      <motion.div
-        drag={canReply ? 'x' : false}
-        dragConstraints={dragConstraints}
-        dragElastic={0.25}
-        style={{ x: dragX }}
-        animate={controls}
-        onDragEnd={canReply ? handleDragEnd : undefined}
-        className={`max-w-[72%] rounded-2xl px-3 py-2 text-[13px] font-body break-words cursor-grab active:cursor-grabbing touch-pan-y ${
+      <div
+        className={`group relative max-w-[72%] rounded-2xl px-3 py-2 text-[13px] font-body break-words ${
           isMine
             ? 'bg-primary text-primary-foreground rounded-br-sm'
             : isAI
@@ -75,6 +62,21 @@ export const ChatBubble = ({ message, index, seen, onReply }) => {
               : 'bg-secondary text-secondary-foreground rounded-bl-sm'
         }`}
       >
+        {onReply && mode === 'calm' && !isAI && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReply(message);
+            }}
+            className="absolute -left-8 top-1/2 -translate-y-1/2 rounded-full bg-card border border-border p-1 text-muted-foreground opacity-70 transition-opacity md:opacity-0 md:group-hover:opacity-100"
+            aria-label="Reply to message"
+            title="Reply"
+          >
+            <Reply size={12} />
+          </button>
+        )}
+
         {replyText && (
           <div className={`mb-2 rounded-lg border-l-2 px-2 py-1 text-[11px] ${
             isMine ? 'bg-white/15 border-white/50' : 'bg-black/5 border-primary/60'
@@ -95,7 +97,7 @@ export const ChatBubble = ({ message, index, seen, onReply }) => {
             minute: '2-digit',
             hour12: true,
           })}
-
+          
           {isMine && isCalm && (
             <span className={`text-[11px] font-bold transition-colors duration-300 ${
               seen ? 'text-sky-300' : 'text-white/50'
@@ -104,7 +106,7 @@ export const ChatBubble = ({ message, index, seen, onReply }) => {
             </span>
           )}
         </span>
-      </motion.div>
+      </div>
     </motion.div>
   );
 };

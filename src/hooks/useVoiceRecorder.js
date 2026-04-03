@@ -9,20 +9,49 @@ export const useVoiceRecorder = () => {
     const chunksRef = useRef([]);
     const timerRef = useRef(null);
 
+    const pickMimeType = () => {
+        if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) {
+            return '';
+        }
+        const candidates = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/ogg;codecs=opus',
+        ];
+        return candidates.find((t) => MediaRecorder.isTypeSupported(t)) || '';
+    };
+
     const startRecording = async () => {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream);
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                channelCount: 1,
+                sampleRate: 16000,
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+            },
+        });
+
+        const mimeType = pickMimeType();
+        const recorderOptions = {
+            audioBitsPerSecond: 24000,
+            ...(mimeType ? { mimeType } : {}),
+        };
+        const mediaRecorder = new MediaRecorder(stream, recorderOptions);
         mediaRecorderRef.current = mediaRecorder;
         chunksRef.current = [];
 
-        mediaRecorder.ondataavailable = (e) => chunksRef.current.push(e.data);
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+        };
         mediaRecorder.onstop = () => {
-            const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+            const blobType = mimeType || chunksRef.current?.[0]?.type || 'audio/webm';
+            const blob = new Blob(chunksRef.current, { type: blobType });
             setAudioBlob(blob);
             stream.getTracks().forEach(t => t.stop());
         };
 
-        mediaRecorder.start();
+        mediaRecorder.start(250);
         setRecording(true);
         setDuration(0);
         timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
