@@ -115,8 +115,9 @@ const Chat = () => {
     if (!audioBlob) return;
     setSendingVoice(true);
     try {
+      const voiceExt = audioBlob.type.includes('ogg') ? 'ogg' : 'webm';
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'voice.webm');
+      formData.append('audio', audioBlob, `voice.${voiceExt}`);
       formData.append('duration', String(duration));
       formData.append('mode', mode);
       const { data: voiceMsg } = await api.post('/messages/voice', formData, {
@@ -424,7 +425,7 @@ const Chat = () => {
 
   return (
     <ModeWrapper>
-      <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
+      <div className="h-[100dvh] bg-background flex flex-col relative">
 
         {/* Header */}
         <header className="sticky top-0 flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
