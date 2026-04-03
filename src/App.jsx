@@ -106,15 +106,38 @@ if (!onboardingComplete) {
 
 const App = () => {
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
+    const enforceFirebaseMessagingWorker = async () => {
+      if (!('serviceWorker' in navigator)) return;
+
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          const scriptUrl = reg.active?.scriptURL || reg.waiting?.scriptURL || reg.installing?.scriptURL || '';
+          if (scriptUrl.endsWith('/sw.js')) {
+            await reg.unregister();
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to cleanup old service worker registrations', err);
+      }
+
       navigator.serviceWorker
-        .register("/firebase-messaging-sw.js")
-        .then((registration) => {
-        })
+        .register('/firebase-messaging-sw.js')
         .catch((err) => {
-          console.error("SW registration failed:", err);
+          console.error('SW registration failed:', err);
         });
-    }
+    };
+
+    enforceFirebaseMessagingWorker();
+
+    const onLoad = () => {
+      enforceFirebaseMessagingWorker();
+    };
+    window.addEventListener('load', onLoad);
+
+    return () => {
+      window.removeEventListener('load', onLoad);
+    };
   }, []);
 
   return (

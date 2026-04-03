@@ -10,35 +10,71 @@ firebase.initializeApp({
   appId: "1:234836871171:web:48d7864696f537fda2e636",
 });
 
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim());
+});
+
 const messaging = firebase.messaging();
+const recentNotificationKeys = new Map();
+
+const makeDedupeKey = (payload, title, body) => {
+  return (
+    payload?.data?.message_id ||
+    payload?.data?.notification_id ||
+    payload?.data?.messageId ||
+    payload?.messageId ||
+    `${title || ''}::${body || ''}`
+  );
+};
+
+const seenRecently = (key) => {
+  if (!key) return false;
+  const now = Date.now();
+  const prev = recentNotificationKeys.get(key);
+  if (prev && now - prev < 30000) return true;
+  recentNotificationKeys.set(key, now);
+  for (const [k, ts] of recentNotificationKeys.entries()) {
+    if (now - ts > 120000) recentNotificationKeys.delete(k);
+  }
+  return false;
+};
+
 messaging.onBackgroundMessage(async (payload) => {
-  console.log("Background message:", payload);
+  // If browser auto-delivers a notification payload, do not render manually.
+  if (payload?.notification) {
+    return;
+  }
+
   const title = payload.notification?.title || payload.data?.title || "New Message";
   const body = payload.notification?.body || payload.data?.body || "";
-  const messageId = payload?.data?.message_id || payload?.data?.messageId || payload?.messageId || Date.now().toString();
+  const dedupeKey = makeDedupeKey(payload, title, body);
+  if (seenRecently(dedupeKey)) {
+    return;
+  }
 
   const options = {
     body,
     icon: "/icon-192.png",
-    tag: messageId,
+    tag: String(dedupeKey),
     renotify: false,
     data: {
       ...(payload.data || {}),
       url: payload.data?.url || '/#/chat',
     },
-    // badge can be provided for platforms that support it
     badge: "/badge-72.png",
   };
 
-  // Close any existing notifications with the same tag before showing
   try {
-    const existing = await self.registration.getNotifications({ tag: messageId });
+    const existing = await self.registration.getNotifications({ tag: String(dedupeKey) });
     if (existing && existing.length) {
-      console.log(`Closing ${existing.length} existing notification(s) with tag ${messageId}`);
       existing.forEach((n) => n.close());
     }
   } catch (err) {
-    console.warn('Error checking existing notifications for dedupe', err);
+    console.warn('Error deduping existing notifications', err);
   }
 
   self.registration.showNotification(title, options);

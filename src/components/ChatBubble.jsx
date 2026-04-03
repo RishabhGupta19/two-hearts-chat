@@ -1,7 +1,6 @@
 import { useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
-import { Reply } from 'lucide-react';
 
 export const ChatBubble = ({ message, index, seen, onReply }) => {
   const { user, mode, partnerName } = useApp();
@@ -62,21 +61,6 @@ export const ChatBubble = ({ message, index, seen, onReply }) => {
               : 'bg-secondary text-secondary-foreground rounded-bl-sm'
         }`}
       >
-        {onReply && mode === 'calm' && !isAI && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onReply(message);
-            }}
-            className="absolute -left-8 top-1/2 -translate-y-1/2 rounded-full bg-card border border-border p-1 text-muted-foreground opacity-70 transition-opacity md:opacity-0 md:group-hover:opacity-100"
-            aria-label="Reply to message"
-            title="Reply"
-          >
-            <Reply size={12} />
-          </button>
-        )}
-
         {replyText && (
           <div className={`mb-2 rounded-lg border-l-2 px-2 py-1 text-[11px] ${
             isMine ? 'bg-white/15 border-white/50' : 'bg-black/5 border-primary/60'

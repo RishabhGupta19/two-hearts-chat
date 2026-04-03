@@ -409,12 +409,10 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     const unsubscribe = subscribeToForegroundMessages((payload) => {
       try {
-        const title = payload?.notification?.title || payload?.data?.title || 'New message';
-        const body = payload?.notification?.body || payload?.data?.body || '';
-        const messageId = payload?.data?.message_id || payload?.data?.messageId || payload?.messageId || Date.now().toString();
-        if (Notification.permission === 'granted') {
-          new Notification(title, { body, icon: '/icon-192.png', tag: messageId, renotify: false, badge: '/badge-72.png' });
-        }
+        // Intentionally no browser Notification here.
+        // We use the service worker as the single notification surface
+        // to avoid duplicate OS notifications from mixed foreground/background paths.
+        void payload;
       } catch (err) {
         console.error('Error showing foreground notification', err);
       }
