@@ -38,6 +38,51 @@ const normalizeRole = (value) =>
 const getMessageSenderId = (message) =>
   message?.sender_id ?? message?.senderId ?? message?.user_id ?? message?.userId ?? null;
 
+const normalizeTimestampInput = (value) => {
+  if (typeof value !== 'string') return value;
+  const hasZone = value.endsWith('Z') || /[+-]\d\d:\d\d$/.test(value);
+  return hasZone ? value : `${value}Z`;
+};
+
+const toTimestamp = (value) => {
+  const t = Date.parse(normalizeTimestampInput(value) || '');
+  return Number.isNaN(t) ? 0 : t;
+};
+
+const sortMessagesAsc = (messages) =>
+  [...messages].sort((a, b) => toTimestamp(a?.timestamp) - toTimestamp(b?.timestamp));
+
+const mergeUniqueById = (existing, incoming) => {
+  const seen = new Set();
+  const out = [];
+  for (const m of [...existing, ...incoming]) {
+    const key = m?.id ? String(m.id) : `${m?.timestamp || ''}:${m?.text || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(m);
+  }
+  return sortMessagesAsc(out);
+};
+
+const readRecentCache = (mode) => {
+  try {
+    const raw = localStorage.getItem(`chat_recent_${mode}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeRecentCache = (mode, messages) => {
+  try {
+    localStorage.setItem(`chat_recent_${mode}`, JSON.stringify((messages || []).slice(-40)));
+  } catch {
+    // ignore storage errors
+  }
+};
+
 const normalizeChatMessage = (message, currentUserId, mode) => {
   const senderId = getMessageSenderId(message);
   const hasExplicitOwnership = typeof message?.isMine === 'boolean';
@@ -306,19 +351,57 @@ export const AppProvider = ({ children }) => {
 
   // Fetch messages from API by mode
   const fetchMessages = useCallback(async (mode) => {
+    const cached = readRecentCache(mode);
+    if (cached.length) {
+      setState((s) => ({
+        ...s,
+        messages: sortMessagesAsc(cached),
+      }));
+    }
+
     try {
-      const { data } = await api.get('/messages', { params: { mode } });
+      const { data } = await api.get('/messages', { params: { mode, limit: 20, offset: 0 } });
       setState((s) => {
         const currentUserId = s.user?.id || '';
+        const normalized = (data.messages || data).map((message) =>
+          normalizeChatMessage(message, currentUserId, mode)
+        );
+        writeRecentCache(mode, normalized);
         return {
           ...s,
-          messages: (data.messages || data).map((message) =>
-            normalizeChatMessage(message, currentUserId, mode)
-          ),
+          messages: sortMessagesAsc(normalized),
         };
       });
+      return { hasMore: Boolean(data?.has_more), loaded: (data?.messages || []).length };
     } catch (e) {
       console.error('Failed to fetch messages:', e);
+      return { hasMore: false, loaded: 0 };
+    }
+  }, []);
+
+  const loadOlderMessages = useCallback(async (mode, offset) => {
+    try {
+      const safeOffset = Math.max(0, Number(offset) || 0);
+      const { data } = await api.get('/messages', {
+        params: { mode, limit: 20, offset: safeOffset },
+      });
+      const returned = data?.messages || [];
+
+      setState((s) => {
+        const currentUserId = s.user?.id || '';
+        const normalized = returned.map((message) =>
+          normalizeChatMessage(message, currentUserId, mode)
+        );
+        return {
+          ...s,
+          messages: mergeUniqueById(s.messages, normalized),
+        };
+      });
+
+      return { hasMore: Boolean(data?.has_more), loaded: returned.length };
+    } catch (e) {
+      console.error('Failed to load older messages:', e);
+      return { hasMore: false, loaded: 0 };
     }
   }, []);
 
@@ -397,11 +480,69 @@ export const AppProvider = ({ children }) => {
 
   const addWsMessage = useCallback((msg) => {
     setState((s) => {
-      // Avoid duplicates by id
-      if (msg.id && s.messages.some((m) => m.id === msg.id)) return s;
       const normalized = normalizeChatMessage(msg, s.user?.id || '', 'calm');
-      return { ...s, messages: [...s.messages, normalized] };
+      const pendingFlag = Boolean(msg?.pending);
+      const incomingId = normalized?.id ? String(normalized.id) : null;
+      const incomingTempId = normalized?.client_temp_id || normalized?.tempId || null;
+
+      const next = [...s.messages];
+
+      if (incomingId) {
+        const byId = next.findIndex((m) => String(m?.id || '') === incomingId);
+        if (byId !== -1) {
+          next[byId] = { ...next[byId], ...normalized, pending: false };
+          return { ...s, messages: next };
+        }
+      }
+
+      if (incomingTempId) {
+        const byTemp = next.findIndex(
+          (m) => (m?.client_temp_id || m?.tempId || null) === incomingTempId
+        );
+        if (byTemp !== -1) {
+          const stableLocalKey = next[byTemp]?.local_key || incomingTempId;
+          next[byTemp] = {
+            ...next[byTemp],
+            ...normalized,
+            local_key: stableLocalKey,
+            pending: false,
+          };
+          return { ...s, messages: next };
+        }
+      }
+
+      // Fallback reconciliation: if temp id is unavailable in echo,
+      // replace the latest pending own message with the same text.
+      if (normalized?.isMine && normalized?.text) {
+        const pendingIdx = [...next]
+          .map((m, idx) => ({ m, idx }))
+          .reverse()
+          .find(({ m }) => m?.pending && m?.isMine && (m?.text || '').trim() === (normalized.text || '').trim())?.idx;
+
+        if (pendingIdx !== undefined) {
+          const stableLocalKey = next[pendingIdx]?.local_key || next[pendingIdx]?.client_temp_id || next[pendingIdx]?.id;
+          next[pendingIdx] = {
+            ...next[pendingIdx],
+            ...normalized,
+            local_key: stableLocalKey,
+            pending: false,
+          };
+          return { ...s, messages: next };
+        }
+      }
+
+      return { ...s, messages: [...next, { ...normalized, pending: pendingFlag }] };
     });
+  }, []);
+
+  const removeMessageByTempId = useCallback((tempId) => {
+    if (!tempId) return;
+    setState((s) => ({
+      ...s,
+      messages: s.messages.filter(
+        (m) => (m?.client_temp_id || m?.tempId || m?.local_key) !== tempId
+      ),
+    }));
   }, []);
 
   const resolveVent = useCallback(async () => {
@@ -488,6 +629,8 @@ export const AppProvider = ({ children }) => {
         fetchGoals,
         fetchUser,
         addWsMessage,
+        removeMessageByTempId,
+        loadOlderMessages,
       }}
     >
       {children}

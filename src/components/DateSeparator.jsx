@@ -2,6 +2,13 @@ import { motion } from 'framer-motion';
 
 const IST_TZ = 'Asia/Kolkata';
 
+const parseMessageDate = (value) => {
+  if (value instanceof Date) return value;
+  if (typeof value !== 'string') return new Date(value);
+  const hasZone = value.endsWith('Z') || /[+-]\d\d:\d\d$/.test(value);
+  return new Date(hasZone ? value : `${value}Z`);
+};
+
 /**
  * Returns a "YYYY-MM-DD" string in IST for a given Date.
  * Used to compare message days without time.
@@ -12,7 +19,7 @@ export const toISTDateKey = (date) => {
     year:  'numeric',
     month: '2-digit',
     day:   '2-digit',
-  }).format(date instanceof Date ? date : new Date(date));
+  }).format(parseMessageDate(date));
 };
 
 /**

@@ -112,7 +112,7 @@ export const GoalCard = ({ goal }) => {
           <span className="text-xs text-muted-foreground">{goal.date ? format(parseISO(goal.date), 'MMM d, yyyy') : ''}</span>
         </div>
       </div>
-      <p className={`font-body text-sm leading-relaxed ${goal.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+      <p className={`font-body text-sm leading-relaxed whitespace-pre-wrap break-words ${goal.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
         {goal.text}
       </p>
       <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">

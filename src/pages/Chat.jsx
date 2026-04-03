@@ -10,6 +10,7 @@ import { DateSeparator, toISTDateKey, formatDateLabel } from '@/components/DateS
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { ResolutionModal } from '@/components/ResolutionModal';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ModeWrapper } from '@/components/ModeWrapper';
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
 import { Loader2, Link2Off, ArrowLeft, Mic, MicOff, X, Send, Play, Pause } from 'lucide-react';
@@ -34,7 +35,7 @@ const Chat = () => {
   const {
     mode, setMode, currentMessages, sendMessage, fetchMessages,
     partnerName, addGoal, resolveVent, isLinked, coupleId,
-    userName, userRole, user, addWsMessage,
+    userName, userRole, user, addWsMessage, removeMessageByTempId, loadOlderMessages,
   } = useApp();
 
   const resolvedRole = userRole || user?.role || '';
@@ -49,6 +50,7 @@ const Chat = () => {
   const [pendingMode, setPendingMode] = useState(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [goalConfirmation, setGoalConfirmation] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
   const [sendingVoice, setSendingVoice] = useState(false);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [previewProgress, setPreviewProgress] = useState(0);
@@ -141,6 +143,13 @@ const Chat = () => {
   const partnerTypingTimer = useRef(null);
   const goalConfirmationTimer = useRef(null);
   const chatEndRef = useRef(null);
+  const chatScrollRef = useRef(null);
+  const isPositioningRef = useRef(true);
+  const loadingOlderRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const suppressAutoScrollRef = useRef(false);
+  const shouldRestoreScrollRef = useRef(null);
+  const [scrollReady, setScrollReady] = useState(false);
   const navigate = useNavigate();
 
   const isVent = mode === 'vent';
@@ -189,7 +198,26 @@ const Chat = () => {
   });
 
   useEffect(() => {
-    fetchMessages(mode);
+    let active = true;
+    setScrollReady(false);
+    isPositioningRef.current = true;
+
+    fetchMessages(mode).then((meta) => {
+      if (!active) return;
+      hasMoreRef.current = Boolean(meta?.hasMore);
+      requestAnimationFrame(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        requestAnimationFrame(() => {
+          if (!active) return;
+          isPositioningRef.current = false;
+          setScrollReady(true);
+        });
+      });
+    });
+
+    return () => {
+      active = false;
+    };
   }, [mode, fetchMessages]);
 
   // Sync seen from DB (messages with seen: true)
@@ -203,8 +231,49 @@ const Chat = () => {
   }, [currentMessages, updateSeenIds]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isPositioningRef.current) return;
+    if (suppressAutoScrollRef.current) return;
+    chatEndRef.current?.scrollIntoView({ behavior: 'auto' });
   }, [currentMessages]);
+
+  useEffect(() => {
+    const pending = shouldRestoreScrollRef.current;
+    if (!pending) return;
+    requestAnimationFrame(() => {
+      const now = chatScrollRef.current;
+      if (!now) return;
+      const delta = now.scrollHeight - pending.previousScrollHeight;
+      now.scrollTop = pending.previousScrollTop + delta;
+      shouldRestoreScrollRef.current = null;
+      suppressAutoScrollRef.current = false;
+    });
+  }, [currentMessages]);
+
+  const handleScroll = useCallback(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    if (el.scrollTop > 60) return;
+    if (loadingOlderRef.current) return;
+    if (!hasMoreRef.current) return;
+
+    loadingOlderRef.current = true;
+    suppressAutoScrollRef.current = true;
+    const previousScrollHeight = el.scrollHeight;
+    const previousScrollTop = el.scrollTop;
+
+    loadOlderMessages(mode, currentMessages.length)
+      .then((meta) => {
+        hasMoreRef.current = Boolean(meta?.hasMore);
+        if (!meta?.loaded) return;
+        shouldRestoreScrollRef.current = { previousScrollHeight, previousScrollTop };
+      })
+      .finally(() => {
+        loadingOlderRef.current = false;
+        if (!shouldRestoreScrollRef.current) {
+          suppressAutoScrollRef.current = false;
+        }
+      });
+  }, [currentMessages.length, loadOlderMessages, mode]);
 
   // Send seen acknowledgement when partner messages arrive
   useEffect(() => {
@@ -242,19 +311,48 @@ const Chat = () => {
 
   const handleSend = async () => {
     if (!input.trim() || sending) return;
-    const text = input;
+    const text = input.trim();
+    const replyPayload = replyingTo
+      ? {
+          id: replyingTo.id,
+          text: replyingTo.text,
+          sender_name: replyingTo.sender_name,
+        }
+      : null;
     setInput('');
 
     if (isCalm) {
       if (!isLinked) return;
+      const clientTempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      addWsMessage({
+        id: clientTempId,
+        local_key: clientTempId,
+        client_temp_id: clientTempId,
+        text,
+        sender: 'user',
+        sender_role: resolvedRole,
+        sender_id: user?.id || '',
+        sender_name: userName,
+        timestamp: new Date().toISOString(),
+        reply_to: replyPayload,
+        isMine: true,
+        pending: true,
+      });
+
       const sent = wsSend({
         text,
+        client_temp_id: clientTempId,
+        reply_to: replyPayload,
         sender_role: resolvedRole,
         sender_name: userName,
       });
       if (!sent) {
+        removeMessageByTempId(clientTempId);
         toast.error('Not connected. Reconnecting...');
         setInput(text);
+      } else {
+        setReplyingTo(null);
       }
     } else {
       setSending(true);
@@ -292,6 +390,7 @@ const Chat = () => {
     if (pendingMode) {
       setMode(pendingMode);
       setInput('');
+      setReplyingTo(null);
       setGoalText('');
       setShowGoalInput(false);
       if (pendingMode === 'vent') setShowBanner(shouldShowVentBanner());
@@ -325,7 +424,7 @@ const Chat = () => {
 
   return (
     <ModeWrapper>
-      <div className="h-[100dvh] bg-background flex flex-col relative">
+      <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
 
         {/* Header */}
         <header className="sticky top-0 flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
@@ -368,9 +467,10 @@ const Chat = () => {
 
         <div
           data-pull-scroll
-          className={`flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-1.5 flex flex-col ${isVent ? 'angry-breathing' : ''}`}
+          ref={chatScrollRef}
+          onScroll={handleScroll}
+          className={`flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-1.5 flex flex-col ${isVent ? 'angry-breathing' : ''} ${scrollReady ? 'opacity-100' : 'opacity-0'}`}
         >
-          <div className="flex-1" />
           {showNotLinkedMessage ? (
             <div className="flex items-center justify-center h-full">
               <motion.div
@@ -408,6 +508,7 @@ const Chat = () => {
                 </div>
               )}
               {currentMessages.map((msg, i) => {
+                const itemKey = msg.local_key || msg.id || i;
                 const ts = msg.timestamp;
                 const dateKey = ts ? toISTDateKey(ts) : null;
                 const prevTs  = i > 0 ? currentMessages[i - 1].timestamp : null;
@@ -416,7 +517,7 @@ const Chat = () => {
 
                 const bubble = msg.type === 'voice' || msg.audio_url ? (
                   <VoiceBubble
-                    key={msg.id || i}
+                    key={itemKey}
                     message={msg}
                     isMine={msg.isMine}
                     seen={seenMessageIds.has(msg.id)}
@@ -424,15 +525,24 @@ const Chat = () => {
                   />
                 ) : (
                   <ChatBubble
-                    key={msg.id || i}
+                    key={itemKey}
                     message={msg}
                     index={i}
                     seen={seenMessageIds.has(msg.id)}
+                    onReply={isCalm ? (m) => {
+                      const previewText = String(m?.text || '').trim();
+                      if (!previewText) return;
+                      setReplyingTo({
+                        id: String(m?.id || ''),
+                        text: previewText,
+                        sender_name: m?.isMine ? 'You' : (partnerName || 'Partner'),
+                      });
+                    } : undefined}
                   />
                 );
 
                 return (
-                  <div key={`grp-${msg.id || i}`}>
+                  <div key={`grp-${itemKey}`}>
                     {showSep && (
                       <DateSeparator label={formatDateLabel(dateKey)} />
                     )}
@@ -476,12 +586,18 @@ const Chat = () => {
                 ))}
               </div>
               <div className="flex gap-2">
-                <Input
+                <Textarea
                   value={goalText}
                   onChange={(e) => setGoalText(e.target.value)}
                   placeholder="What's a goal you'd like to share?"
-                  className="rounded-[12px] text-sm flex-1"
-                  onKeyDown={(e) => e.key === 'Enter' && handleGoalSubmit()}
+                  rows={3}
+                  className="rounded-[12px] text-sm flex-1 min-h-[84px] resize-none"
+                  onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                      e.preventDefault();
+                      handleGoalSubmit();
+                    }
+                  }}
                 />
                 <motion.button
                   whileTap={{ scale: 0.97 }}
@@ -515,6 +631,25 @@ const Chat = () => {
             className="border-t border-border bg-card px-3 pt-[6.5px] shrink-0"
             style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
           >
+            {isCalm && replyingTo && (
+              <div className="mb-2 rounded-xl border border-border bg-muted/40 px-3 py-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold text-primary">Replying to {replyingTo.sender_name}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{replyingTo.text}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setReplyingTo(null)}
+                    aria-label="Cancel reply"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {isCalm && (
               <button
                 onClick={() => setShowGoalInput(!showGoalInput)}
