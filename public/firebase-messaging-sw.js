@@ -80,6 +80,39 @@ messaging.onBackgroundMessage(async (payload) => {
   self.registration.showNotification(title, options);
 });
 
+// Ensure we display notifications when the browser emits a 'push' event directly.
+// Some FCM payloads arrive as raw push events and may contain a notification/data
+// structure that the compat layer doesn't auto-show in all cases.
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let data = {};
+  try {
+    data = event.data.json();
+  } catch (e) {
+    try { data = { notification: { body: String(event.data) } }; } catch (_) { data = {}; }
+  }
+
+  const notification = data.notification || {};
+  const payload = data.data || {};
+
+  const title = notification.title || payload.title || 'Solace';
+  const options = {
+    body: notification.body || payload.body || '',
+    icon: '/icon-192.png',
+    badge: '/badge-72.png',
+    data: {
+      ...(payload || {}),
+      url: payload.url || '/#/chat',
+    },
+    tag: payload.tag || 'solace-message',
+    renotify: true,
+    vibrate: [200, 100, 200],
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 

@@ -406,10 +406,27 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     const unsubscribe = subscribeToForegroundMessages((payload) => {
       try {
-        // Intentionally no browser Notification here.
-        // We use the service worker as the single notification surface
-        // to avoid duplicate OS notifications from mixed foreground/background paths.
-        void payload;
+        // Play sound / UI handling (existing behavior may live elsewhere)
+        // Additionally show a system notification when the app is foregrounded.
+        if (Notification.permission === 'granted') {
+          const title = payload?.notification?.title || payload?.data?.title || 'Solace';
+          const options = {
+            body: payload?.notification?.body || payload?.data?.body || '',
+            icon: '/icon-192.png',
+            badge: '/badge-72.png',
+            data: payload?.data || {},
+            tag: payload?.data?.tag || 'solace-message',
+            renotify: true,
+          };
+
+          navigator.serviceWorker.ready.then((registration) => {
+            try {
+              registration.showNotification(title, options);
+            } catch (err) {
+              console.error('Failed to show foreground notification via SW registration', err);
+            }
+          }).catch((err) => console.error('Service worker not ready for notifications', err));
+        }
       } catch (err) {
         console.error('Error showing foreground notification', err);
       }
