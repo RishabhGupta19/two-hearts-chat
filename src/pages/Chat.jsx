@@ -241,7 +241,7 @@ const Chat = () => {
 
   const isVent = mode === 'vent';
   const isCalm = mode === 'calm';
-  const wsEnabled = isCalm && isLinked && !!coupleId;
+  const wsEnabled = isCalm && isLinked && !!coupleId && String(coupleId) !== 'undefined';
   const isFocusedView = Array.isArray(focusedMessages);
 
   const isWithinDeleteWindow = useCallback((message) => {

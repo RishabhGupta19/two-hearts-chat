@@ -1,6 +1,53 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 
-const WS_BASE = import.meta.env.VITE_WS_BASE_URL;
+const ENV_WS_BASE = String(import.meta.env.VITE_WS_BASE_URL || "https://solace-nam6.onrender.com");
+const ENV_API_BASE = String(import.meta.env.VITE_API_BASE_URL || '').trim();
+
+const isValidCoupleId = (value) => {
+  const v = String(value || '').trim();
+  return Boolean(v) && v !== 'undefined' && v !== 'null';
+};
+
+const normalizeWsBase = (raw) => {
+  const base = String(raw || '').trim();
+  if (!base || base === 'undefined' || base === 'null' || base.includes('/undefined')) return '';
+
+  // Reject relative paths like '/undefined' so we don't accidentally target Vercel host.
+  if (!/^(wss?:\/\/|https?:\/\/)/i.test(base)) return '';
+
+  try {
+    const parsed = new URL(base);
+    const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : parsed.protocol === 'http:' ? 'ws:' : parsed.protocol;
+    return `${wsProtocol}//${parsed.host}${parsed.pathname.replace(/\/+$/, '')}`;
+  } catch (e) {
+    return '';
+  }
+};
+
+const resolveWsBase = () => {
+  const normalizedEnvWs = normalizeWsBase(ENV_WS_BASE);
+  if (normalizedEnvWs) {
+    return normalizedEnvWs;
+  }
+
+  if (ENV_API_BASE && ENV_API_BASE !== 'undefined') {
+    try {
+      const apiUrl = new URL(ENV_API_BASE);
+      const wsProtocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${wsProtocol}//${apiUrl.host}`;
+    } catch (e) {}
+  }
+
+  if (typeof window !== 'undefined') {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return `${wsProtocol}//${window.location.hostname}:8000`;
+    }
+    return `${wsProtocol}//${window.location.host}`;
+  }
+
+  return '';
+};
 
 export const useWebSocket = ({ coupleId, enabled, onMessage, onTyping }) => {
   const wsRef = useRef(null);
@@ -27,10 +74,12 @@ export const useWebSocket = ({ coupleId, enabled, onMessage, onTyping }) => {
   }, []);
 
   const connect = useCallback(() => {
-    if (!coupleId || !enabledRef.current) return;
+    if (!enabledRef.current || !isValidCoupleId(coupleId)) return;
     cleanup();
 
-    const url = `${WS_BASE}/ws/chat/${coupleId}/`;
+    const wsBase = resolveWsBase();
+    if (!wsBase) return;
+    const url = `${wsBase}/ws/chat/${String(coupleId).trim()}/`;
     const token = localStorage.getItem('access_token');
     const ws = new WebSocket(token ? `${url}?token=${token}` : url);
     wsRef.current = ws;
@@ -70,7 +119,7 @@ export const useWebSocket = ({ coupleId, enabled, onMessage, onTyping }) => {
   }, [coupleId, cleanup]);
 
   useEffect(() => {
-    if (enabled && coupleId) {
+    if (enabled && isValidCoupleId(coupleId)) {
       connect();
     } else {
       cleanup();
