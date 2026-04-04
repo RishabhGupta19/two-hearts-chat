@@ -88,6 +88,19 @@ const Chat = () => {
   const searchInputRef = useRef(null);
   const [showPartnerLightbox, setShowPartnerLightbox] = useState(false);
   const inputRef = useRef(null);
+  const [layoutReady, setLayoutReady] = useState(false);
+
+  useEffect(() => {
+    // On notification cold start the viewport height isn't settled yet.
+    // A short delay lets the browser finalize chrome/safe-area before first paint.
+    const t = setTimeout(() => {
+      try {
+        document.documentElement.style.setProperty('--real-vh', window.innerHeight + 'px');
+      } catch (e) {}
+      setLayoutReady(true);
+    }, 80);
+    return () => clearTimeout(t);
+  }, []);
 
   const { recording, audioBlob, duration, startRecording, stopRecording, cancelRecording, setAudioBlob } = useVoiceRecorder();
 
@@ -189,6 +202,21 @@ const Chat = () => {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [scrollReady, setScrollReady] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Ensure hardware back (popstate) navigates to dashboard instead of closing the PWA
+    try {
+      window.history.pushState(null, '', window.location.href);
+    } catch (e) {}
+
+    const handlePopState = () => {
+      try { window.history.pushState(null, '', window.location.href); } catch (e) {}
+      navigate('/dashboard');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [navigate]);
 
   const isVent = mode === 'vent';
   const isCalm = mode === 'calm';
@@ -607,6 +635,7 @@ const Chat = () => {
       inputRef.current?.focus();
       requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }));
     });
+    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   const handleGoalSubmit = async () => {
@@ -668,7 +697,13 @@ const Chat = () => {
 
   return (
     <ModeWrapper>
-      <div className="h-[100dvh] bg-background flex flex-col relative">
+      <div
+        className="bg-background flex flex-col relative"
+        style={{
+          height: 'var(--real-vh, 100dvh)',
+          visibility: layoutReady ? 'visible' : 'hidden',
+        }}
+      >
 
         {/* Header */}
         <header className="sticky top-0 flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">

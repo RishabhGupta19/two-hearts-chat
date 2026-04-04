@@ -11,6 +11,20 @@ const TAGS = ['Growth', 'Us', 'Personal'];
 const Goals = () => {
   const { goals, partnerName, userRole, fetchGoals, addGoal } = useApp();
   const navigate = useNavigate();
+  useEffect(() => {
+    // Ensure hardware back (popstate) navigates to dashboard instead of closing the PWA
+    try {
+      window.history.pushState(null, '', window.location.href);
+    } catch (e) {}
+
+    const handlePopState = () => {
+      try { window.history.pushState(null, '', window.location.href); } catch (e) {}
+      navigate('/dashboard');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [navigate]);
   const [showModal, setShowModal] = useState(false);
   const [goalText, setGoalText] = useState('');
   const [selectedTag, setSelectedTag] = useState('Growth');

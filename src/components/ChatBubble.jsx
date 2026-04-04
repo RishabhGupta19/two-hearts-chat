@@ -34,11 +34,6 @@ const ChatBubbleComponent = ({ message, index, seen, onReply, onReplyPreviewClic
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: Math.min(index, 4) * 0.02 }}
       className={`mb-3 flex w-full ${isMine ? 'justify-end pr-1' : 'justify-start pl-1'}`}
-      onContextMenu={(e) => {
-        if (!onReply || mode !== 'calm' || isAI || isDeleted) return;
-        e.preventDefault();
-        onReply(message);
-      }}
       onDoubleClick={() => {
         if (!onReply || mode !== 'calm' || isAI || isDeleted) return;
         onReply(message);
@@ -47,10 +42,7 @@ const ChatBubbleComponent = ({ message, index, seen, onReply, onReplyPreviewClic
         if (mode !== 'calm' || isAI || isDeleted) return;
         if (canDelete && onLongPressDelete) {
           longPressTimerRef.current = setTimeout(() => onLongPressDelete(message), 420);
-          return;
         }
-        if (!onReply) return;
-        longPressTimerRef.current = setTimeout(() => onReply(message), 360);
       }}
       onTouchEnd={() => {
         if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
