@@ -89,6 +89,9 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
   const isOwnedByCurrentUser = currentUserId && senderId
     ? String(senderId) === String(currentUserId)
     : null;
+  const replyTo = message?.replyTo || (message?.reply_to?.id && message?.reply_to?.text
+    ? { messageId: message.reply_to.id, text: message.reply_to.text }
+    : null);
 
   if (mode === 'calm') {
     const isMine = hasExplicitOwnership
@@ -102,6 +105,8 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
 
     return {
       ...message,
+      replyTo,
+      is_deleted: Boolean(message?.is_deleted),
       isMine,
       sender: isMine ? 'user' : 'partner',
     };
@@ -125,6 +130,8 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
 
   return {
     ...message,
+    replyTo,
+    is_deleted: Boolean(message?.is_deleted),
     isMine,
     sender: isAI ? 'ai' : 'user',
   };
@@ -264,51 +271,30 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const updateProfilePic = useCallback(async (file) => {
+    // Upload via backend Cloudinary endpoint
     try {
-      // Generate unique filename
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substr(2, 9);
-      const fileName = `${timestamp}-${random}-${file.name}`;
-      const filePath = `profile_pics/${state.user?.id || 'unknown'}/${fileName}`;
+      const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowed.includes(file.type)) throw new Error('Invalid file type');
+      const maxSize = 2 * 1024 * 1024; // 2MB
+      if (file.size > maxSize) throw new Error('File too large (max 2MB)');
 
-      const { data, error: uploadError } = await supabase.storage
-        .from('gallery')
-        .upload(filePath, file);
+      const form = new FormData();
+      form.append('image', file);
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        throw uploadError;
-      }
-
-      const { data: urlData } = supabase.storage
-        .from('gallery')
-        .getPublicUrl(filePath);
-
-      const imageUrl = urlData.publicUrl;
-      // Save to localStorage for persistence
-      localStorage.setItem('userProfilePic', imageUrl);
-
-      // Update state immediately with the new profile picture
-      setState((s) => {
-        return {
-          ...s,
-          userProfilePic: imageUrl,
-        };
+      const { data } = await api.post('/auth/upload-profile-pic', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      // Save profile pic URL to backend (fire and forget - best effort)
-      try {
-        const { data: profileData } = await api.put('/auth/profile', {
-          profile_pic_url: imageUrl,
-        });
-        if (profileData?.user || profileData?.profile_pic_url || profileData?.profile_picture_url) {
-          syncUserState(profileData.user || profileData);
-        }
-      } catch (backendErr) {
-        console.warn('Backend profile update failed, but image uploaded:', backendErr);
+      const user = data.user || data;
+      const pic = user.profile_picture_url || user.profile_pic_url || user.profilePictureUrl || null;
+      if (pic) {
+        try {
+          localStorage.setItem('userProfilePic', pic);
+        } catch {}
       }
-
-      return imageUrl;
+      // Sync user state from backend
+      syncUserState(user);
+      return pic;
     } catch (err) {
       console.error('Failed to update profile pic:', err);
       throw err;
@@ -360,7 +346,7 @@ export const AppProvider = ({ children }) => {
     }
 
     try {
-      const { data } = await api.get('/messages', { params: { mode, limit: 20, offset: 0 } });
+      const { data } = await api.get('/messages', { params: { mode, limit: 50 } });
       setState((s) => {
         const currentUserId = s.user?.id || '';
         const normalized = (data.messages || data).map((message) =>
@@ -372,18 +358,25 @@ export const AppProvider = ({ children }) => {
           messages: sortMessagesAsc(normalized),
         };
       });
-      return { hasMore: Boolean(data?.has_more), loaded: (data?.messages || []).length };
+      return {
+        hasMore: Boolean(data?.has_more),
+        loaded: (data?.messages || []).length,
+        oldestTimestamp: data?.oldest_timestamp || null,
+      };
     } catch (e) {
       console.error('Failed to fetch messages:', e);
-      return { hasMore: false, loaded: 0 };
+      return { hasMore: false, loaded: 0, oldestTimestamp: null };
     }
   }, []);
 
-  const loadOlderMessages = useCallback(async (mode, offset) => {
+  const loadOlderMessages = useCallback(async (mode, before) => {
     try {
-      const safeOffset = Math.max(0, Number(offset) || 0);
+      if (!before) {
+        return { hasMore: false, loaded: 0, oldestTimestamp: null };
+      }
+
       const { data } = await api.get('/messages', {
-        params: { mode, limit: 20, offset: safeOffset },
+        params: { mode, limit: 50, before },
       });
       const returned = data?.messages || [];
 
@@ -398,10 +391,14 @@ export const AppProvider = ({ children }) => {
         };
       });
 
-      return { hasMore: Boolean(data?.has_more), loaded: returned.length };
+      return {
+        hasMore: Boolean(data?.has_more),
+        loaded: returned.length,
+        oldestTimestamp: data?.oldest_timestamp || null,
+      };
     } catch (e) {
       console.error('Failed to load older messages:', e);
-      return { hasMore: false, loaded: 0 };
+      return { hasMore: false, loaded: 0, oldestTimestamp: null };
     }
   }, []);
 
@@ -543,6 +540,55 @@ export const AppProvider = ({ children }) => {
     }));
   }, []);
 
+  const deleteMessage = useCallback(async (messageId) => {
+    const { data } = await api.delete(`/messages/${messageId}`);
+    setState((s) => {
+      const normalized = normalizeChatMessage(data, s.user?.id || '', s.mode);
+      return {
+        ...s,
+        messages: s.messages.map((m) => (String(m.id) === String(messageId) ? { ...m, ...normalized } : m)),
+      };
+    });
+    return data;
+  }, []);
+
+  const searchMessages = useCallback(async (params) => {
+    const { query, mode, chatId, limit = 30 } = params || {};
+    if ((mode || state.mode) !== 'calm') return [];
+    if (!String(query || '').trim()) return [];
+    const { data } = await api.get('/messages/search', {
+      params: {
+        query: String(query).trim(),
+        mode,
+        chatId,
+        limit,
+      },
+    });
+    const currentUserId = state.user?.id || '';
+    return (data?.results || []).map((m) => normalizeChatMessage(m, currentUserId, mode || state.mode));
+  }, [state.mode, state.user?.id]);
+
+  const fetchMessageContext = useCallback(async (params) => {
+    const { messageId, mode, window = 6 } = params || {};
+    if ((mode || state.mode) !== 'calm') return { messages: [], targetId: null };
+    if (!messageId) return { messages: [], targetId: null };
+
+    const { data } = await api.get('/messages/context', {
+      params: {
+        messageId,
+        mode: mode || state.mode,
+        window,
+      },
+    });
+
+    const currentUserId = state.user?.id || '';
+    const normalized = (data?.messages || []).map((m) => normalizeChatMessage(m, currentUserId, mode || state.mode));
+    return {
+      messages: normalized,
+      targetId: data?.target_id || null,
+    };
+  }, [state.mode, state.user?.id]);
+
   const resolveVent = useCallback(async () => {
     try {
       await api.post('/chat/resolve');
@@ -629,6 +675,9 @@ export const AppProvider = ({ children }) => {
         addWsMessage,
         removeMessageByTempId,
         loadOlderMessages,
+        deleteMessage,
+        searchMessages,
+        fetchMessageContext,
       }}
     >
       {children}
