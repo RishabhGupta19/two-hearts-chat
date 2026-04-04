@@ -1,7 +1,8 @@
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 
-export const TypingIndicator = ({ label }) => {
+const TypingIndicatorComponent = ({ label }) => {
   const { mode, partnerName } = useApp();
   const resolvedLabel = mode === 'calm'
     ? partnerName || 'Partner'
@@ -30,3 +31,5 @@ export const TypingIndicator = ({ label }) => {
     </motion.div>
   );
 };
+
+export const TypingIndicator = memo(TypingIndicatorComponent);
