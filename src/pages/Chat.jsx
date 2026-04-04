@@ -162,6 +162,27 @@ const Chat = () => {
   const handleSendVoice = useCallback(async () => {
     if (!audioBlob) return;
     setSendingVoice(true);
+
+    // Show voice message instantly with a local blob URL while upload is in-flight.
+    const localUrl = URL.createObjectURL(audioBlob);
+    const tempId = `tmp_voice_${Date.now()}`;
+    addWsMessage({
+      id: tempId,
+      local_key: tempId,
+      client_temp_id: tempId,
+      type: 'voice',
+      audio_url: localUrl,
+      duration,
+      sender: 'user',
+      sender_name: userName,
+      sender_role: resolvedRole,
+      sender_id: user?.id || '',
+      timestamp: new Date().toISOString(),
+      isMine: true,
+      pending: true,
+    });
+    setAudioBlob(null);
+
     try {
       const voiceExt = audioBlob.type.includes('ogg') ? 'ogg' : 'webm';
       const formData = new FormData();
@@ -171,15 +192,15 @@ const Chat = () => {
       const { data: voiceMsg } = await api.post('/messages/voice', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      // addWsMessage normalizes and adds message to state
+      removeMessageByTempId(tempId);
       addWsMessage({ ...voiceMsg, isMine: true });
-      setAudioBlob(null);
     } catch (e) {
+      removeMessageByTempId(tempId);
       toast.error('Failed to send voice message');
     } finally {
       setSendingVoice(false);
     }
-  }, [audioBlob, duration, mode, addWsMessage, setAudioBlob]);
+  }, [audioBlob, duration, mode, addWsMessage, removeMessageByTempId, setAudioBlob, userName, resolvedRole, user]);
 
   // ✅ 1. seenMessageIds state first
   const [seenMessageIds, setSeenMessageIds] = useState(() => {
@@ -220,7 +241,7 @@ const Chat = () => {
 
   const isVent = mode === 'vent';
   const isCalm = mode === 'calm';
-  const wsEnabled = isCalm && isLinked && !!coupleId;
+  const wsEnabled = isCalm && isLinked && !!coupleId && String(coupleId) !== 'undefined';
   const isFocusedView = Array.isArray(focusedMessages);
 
   const isWithinDeleteWindow = useCallback((message) => {
@@ -1104,7 +1125,7 @@ const Chat = () => {
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={startRecording}
-                  disabled={sending || !connected}
+                  disabled={sending}
                   className="rounded-full p-2 shrink-0 transition-colors bg-muted text-muted-foreground hover:bg-muted/80 disabled:opacity-40"
                   title="Tap to record"
                 >
@@ -1161,12 +1182,12 @@ const Chat = () => {
                         : `Message ${partnerName || 'your partner'}...`
                     }
                     className="rounded-[12px] text-sm flex-1 min-w-0"
-                    disabled={sending || (isCalm && !connected) || !!audioBlob}
+                    disabled={sending || !!audioBlob}
                   />
                   <motion.button
                     whileTap={{ scale: 0.97 }}
                     onClick={handleSend}
-                    disabled={sending || (isCalm && !connected) || !!audioBlob}
+                    disabled={sending || !!audioBlob}
                     className="rounded-pill bg-primary px-4 py-2 text-sm text-primary-foreground font-medium shadow-soft hover:bg-primary/90 transition-colors flex items-center justify-center shrink-0 disabled:opacity-50"
                   >
                     {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
@@ -1188,7 +1209,7 @@ const Chat = () => {
         <ResolutionModal open={showResolution} onClose={() => setShowResolution(false)} />
 
         <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
-          <AlertDialogContent className="max-w-sm">
+          <AlertDialogContent className="w-[calc(100%-2.25rem)] max-w-[320px] rounded-2xl">
             <AlertDialogHeader>
               <AlertDialogTitle>Delete this message?</AlertDialogTitle>
               <AlertDialogDescription>
