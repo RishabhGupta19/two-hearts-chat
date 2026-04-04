@@ -24,6 +24,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ModeWrapper } from '@/components/ModeWrapper';
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
 import { Loader2, Link2Off, ArrowLeft, Mic, X, Send, Play, Pause, Search } from 'lucide-react';
+import Lightbox from '@/components/Lightbox';
 import { toast } from 'sonner';
 import { friendlyError } from '@/utils/errorMessages';
 import api from '@/api';
@@ -85,6 +86,7 @@ const Chat = () => {
   const messageRefs = useRef({});
   const searchContainerRef = useRef(null);
   const searchInputRef = useRef(null);
+  const [showPartnerLightbox, setShowPartnerLightbox] = useState(false);
   const inputRef = useRef(null);
 
   const { recording, audioBlob, duration, startRecording, stopRecording, cancelRecording, setAudioBlob } = useVoiceRecorder();
@@ -298,6 +300,16 @@ const Chat = () => {
   const confirmDeleteMessage = useCallback(async () => {
     if (!deleteTarget?.id) return;
     try {
+      // Preserve user's current scroll position so deleting a message
+      // doesn't yank them back to the latest messages.
+      const el = chatScrollRef.current;
+      if (el) {
+        shouldRestoreScrollRef.current = {
+          previousScrollHeight: el.scrollHeight,
+          previousScrollTop: el.scrollTop,
+        };
+        suppressAutoScrollRef.current = true;
+      }
       await deleteMessage(deleteTarget.id);
     } catch (e) {
       toast.error(friendlyError(e));
@@ -669,7 +681,14 @@ const Chat = () => {
             </button>
             {isCalm && (
               <>
-                <div className="h-6 w-6 rounded-full overflow-hidden flex items-center justify-center shrink-0">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => { if (partnerProfilePic) setShowPartnerLightbox(true); }}
+                  onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && partnerProfilePic) setShowPartnerLightbox(true); }}
+                  className={`h-6 w-6 rounded-full overflow-hidden flex items-center justify-center shrink-0 ${partnerProfilePic ? 'cursor-pointer' : ''}`}
+                  aria-label={partnerProfilePic ? 'View partner photo' : 'Partner avatar'}
+                >
                   {partnerProfilePic ? (
                     <img src={partnerProfilePic} alt={partnerName || 'Partner'} className="h-full w-full object-cover object-center block" />
                   ) : (
@@ -1120,13 +1139,21 @@ const Chat = () => {
                 </>
               )}
             </div>
+
+              {/* Partner photo lightbox */}
+              {showPartnerLightbox && partnerProfilePic && (
+                <Lightbox
+                  photo={{ image_url: partnerProfilePic, created_at: new Date().toISOString() }}
+                  onClose={() => setShowPartnerLightbox(false)}
+                />
+              )}
           </div>
         )}
 
         <ResolutionModal open={showResolution} onClose={() => setShowResolution(false)} />
 
         <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
-          <AlertDialogContent>
+          <AlertDialogContent className="max-w-sm">
             <AlertDialogHeader>
               <AlertDialogTitle>Delete this message?</AlertDialogTitle>
               <AlertDialogDescription>

@@ -357,12 +357,12 @@ const Dashboard = () => {
 
               <div className="mt-4">
                 <label className="text-xs text-muted-foreground mb-1 block">Nickname</label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <input
                     value={nicknameInput}
                     onChange={(e) => setNicknameInput(e.target.value)}
                     disabled={savingNickname}
-                    className="flex-1 rounded-md border border-border px-3 py-2 bg-card text-foreground text-sm disabled:opacity-60"
+                    className="flex-1 min-w-0 rounded-md border border-border px-3 py-2 bg-card text-foreground text-sm disabled:opacity-60"
                     placeholder="Enter a nickname"
                   />
                   <button
@@ -380,7 +380,7 @@ const Dashboard = () => {
                       }
                     }}
                     disabled={savingNickname}
-                    className="min-w-[72px] flex items-center justify-center rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground"
+                    className="w-20 shrink-0 flex items-center justify-center rounded-md bg-primary px-2 py-2 text-sm text-primary-foreground"
                   >
                     {savingNickname ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
                   </button>
