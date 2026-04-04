@@ -23,6 +23,7 @@ const recentNotificationKeys = new Map();
 
 const makeDedupeKey = (payload, title, body) => {
   return (
+    payload?.messageId ||
     payload?.data?.message_id ||
     payload?.data?.notification_id ||
     payload?.data?.messageId ||
@@ -86,31 +87,47 @@ messaging.onBackgroundMessage(async (payload) => {
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
-  let data = {};
-  try {
-    data = event.data.json();
-  } catch (e) {
-    try { data = { notification: { body: String(event.data) } }; } catch (_) { data = {}; }
-  }
+  event.waitUntil((async () => {
+    let data = {};
+    try {
+      data = event.data.json();
+    } catch (e) {
+      try { data = { notification: { body: String(event.data) } }; } catch (_) { data = {}; }
+    }
 
-  const notification = data.notification || {};
-  const payload = data.data || {};
+    // For notification payloads, browsers/FCM can auto-display system notifications.
+    // Showing another one manually here can cause duplicates.
+    if (data?.notification) return;
 
-  const title = notification.title || payload.title || 'Solace';
-  const options = {
-    body: notification.body || payload.body || '',
-    icon: '/icon-192.png',
-    badge: '/badge-72.png',
-    data: {
-      ...(payload || {}),
-      url: payload.url || '/#/chat',
-    },
-    tag: payload.tag || 'solace-message',
-    renotify: true,
-    vibrate: [200, 100, 200],
-  };
+    const notification = data.notification || {};
+    const payload = data.data || {};
+    const title = notification.title || payload.title || 'Solace';
+    const body = notification.body || payload.body || '';
 
-  event.waitUntil(self.registration.showNotification(title, options));
+    const dedupeKey = makeDedupeKey({ data: payload, messageId: data?.messageId }, title, body);
+    if (seenRecently(dedupeKey)) return;
+
+    // If any app window is visible, foreground onMessage handler will show notification.
+    // Skip here to avoid duplicate notifications for the same message.
+    const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const hasVisibleClient = clientList.some((client) => client.visibilityState === 'visible');
+    if (hasVisibleClient) return;
+
+    const options = {
+      body,
+      icon: '/icon-192.png',
+      badge: '/badge-72.png',
+      data: {
+        ...(payload || {}),
+        url: payload.url || '/#/chat',
+      },
+      tag: payload.tag || String(dedupeKey || 'solace-message'),
+      renotify: true,
+      vibrate: [200, 100, 200],
+    };
+
+    await self.registration.showNotification(title, options);
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {

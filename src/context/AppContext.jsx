@@ -404,18 +404,36 @@ export const AppProvider = ({ children }) => {
 
   // Subscribe to foreground push messages and show a browser notification
   useEffect(() => {
+    const recentForegroundKeys = new Map();
+
     const unsubscribe = subscribeToForegroundMessages((payload) => {
       try {
         // Play sound / UI handling (existing behavior may live elsewhere)
         // Additionally show a system notification when the app is foregrounded.
         if (Notification.permission === 'granted') {
           const title = payload?.notification?.title || payload?.data?.title || 'Solace';
+          const body = payload?.notification?.body || payload?.data?.body || '';
+          const dedupeKey = payload?.data?.message_id
+            || payload?.data?.notification_id
+            || payload?.data?.messageId
+            || payload?.messageId
+            || `${title}::${body}`;
+
+          const now = Date.now();
+          const prev = recentForegroundKeys.get(dedupeKey);
+          if (prev && now - prev < 8000) return;
+          recentForegroundKeys.set(dedupeKey, now);
+
+          for (const [k, ts] of recentForegroundKeys.entries()) {
+            if (now - ts > 60000) recentForegroundKeys.delete(k);
+          }
+
           const options = {
-            body: payload?.notification?.body || payload?.data?.body || '',
+            body,
             icon: '/icon-192.png',
             badge: '/badge-72.png',
             data: payload?.data || {},
-            tag: payload?.data?.tag || 'solace-message',
+            tag: payload?.data?.tag || String(dedupeKey || 'solace-message'),
             renotify: true,
           };
 
