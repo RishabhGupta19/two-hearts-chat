@@ -1188,7 +1188,7 @@ const Chat = () => {
         <ResolutionModal open={showResolution} onClose={() => setShowResolution(false)} />
 
         <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
-          <AlertDialogContent className="max-w-sm">
+          <AlertDialogContent className="w-[calc(100%-2.25rem)] max-w-[320px] rounded-2xl">
             <AlertDialogHeader>
               <AlertDialogTitle>Delete this message?</AlertDialogTitle>
               <AlertDialogDescription>
