@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 
-const WS_BASE = import.meta.env.VITE_WS_BASE_URL || 'wss://solace-nam6.onrender.com';
+const WS_BASE = import.meta.env.VITE_WS_BASE_URL;
 
 export const useWebSocket = ({ coupleId, enabled, onMessage, onTyping }) => {
   const wsRef = useRef(null);

@@ -162,6 +162,27 @@ const Chat = () => {
   const handleSendVoice = useCallback(async () => {
     if (!audioBlob) return;
     setSendingVoice(true);
+
+    // Show voice message instantly with a local blob URL while upload is in-flight.
+    const localUrl = URL.createObjectURL(audioBlob);
+    const tempId = `tmp_voice_${Date.now()}`;
+    addWsMessage({
+      id: tempId,
+      local_key: tempId,
+      client_temp_id: tempId,
+      type: 'voice',
+      audio_url: localUrl,
+      duration,
+      sender: 'user',
+      sender_name: userName,
+      sender_role: resolvedRole,
+      sender_id: user?.id || '',
+      timestamp: new Date().toISOString(),
+      isMine: true,
+      pending: true,
+    });
+    setAudioBlob(null);
+
     try {
       const voiceExt = audioBlob.type.includes('ogg') ? 'ogg' : 'webm';
       const formData = new FormData();
@@ -171,15 +192,15 @@ const Chat = () => {
       const { data: voiceMsg } = await api.post('/messages/voice', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      // addWsMessage normalizes and adds message to state
+      removeMessageByTempId(tempId);
       addWsMessage({ ...voiceMsg, isMine: true });
-      setAudioBlob(null);
     } catch (e) {
+      removeMessageByTempId(tempId);
       toast.error('Failed to send voice message');
     } finally {
       setSendingVoice(false);
     }
-  }, [audioBlob, duration, mode, addWsMessage, setAudioBlob]);
+  }, [audioBlob, duration, mode, addWsMessage, removeMessageByTempId, setAudioBlob, userName, resolvedRole, user]);
 
   // ✅ 1. seenMessageIds state first
   const [seenMessageIds, setSeenMessageIds] = useState(() => {
