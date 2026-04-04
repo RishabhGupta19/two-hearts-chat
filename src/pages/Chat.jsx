@@ -1125,7 +1125,7 @@ const Chat = () => {
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={startRecording}
-                  disabled={sending || !connected}
+                  disabled={sending}
                   className="rounded-full p-2 shrink-0 transition-colors bg-muted text-muted-foreground hover:bg-muted/80 disabled:opacity-40"
                   title="Tap to record"
                 >
@@ -1182,12 +1182,12 @@ const Chat = () => {
                         : `Message ${partnerName || 'your partner'}...`
                     }
                     className="rounded-[12px] text-sm flex-1 min-w-0"
-                    disabled={sending || (isCalm && !connected) || !!audioBlob}
+                    disabled={sending || !!audioBlob}
                   />
                   <motion.button
                     whileTap={{ scale: 0.97 }}
                     onClick={handleSend}
-                    disabled={sending || (isCalm && !connected) || !!audioBlob}
+                    disabled={sending || !!audioBlob}
                     className="rounded-pill bg-primary px-4 py-2 text-sm text-primary-foreground font-medium shadow-soft hover:bg-primary/90 transition-colors flex items-center justify-center shrink-0 disabled:opacity-50"
                   >
                     {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
