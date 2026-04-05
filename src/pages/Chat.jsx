@@ -220,6 +220,7 @@ const Chat = () => {
   const suppressAutoScrollRef = useRef(false);
   const shouldRestoreScrollRef = useRef(null);
   const scrollDebounceRef = useRef(null);  // Debounce timer for scroll events
+  const backToLatestTimersRef = useRef([]);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [scrollReady, setScrollReady] = useState(false);
   const navigate = useNavigate();
@@ -357,11 +358,43 @@ const Chat = () => {
     }
   }, [fetchMessageContext, isCalm, mode]);
 
+  const forceScrollToLatest = useCallback((behavior = 'auto') => {
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    chatEndRef.current?.scrollIntoView({ behavior });
+  }, []);
+
   const backToLatestMessages = useCallback(() => {
+    // Reset any pending scroll-restoration from previous list operations.
+    if (scrollDebounceRef.current) {
+      clearTimeout(scrollDebounceRef.current);
+      scrollDebounceRef.current = null;
+    }
+    for (const t of backToLatestTimersRef.current) clearTimeout(t);
+    backToLatestTimersRef.current = [];
+
+    loadingOlderRef.current = false;
+    setLoadingOlder(false);
+    shouldRestoreScrollRef.current = null;
+    suppressAutoScrollRef.current = false;
+
     setFocusedMessages(null);
     setFocusedTargetId(null);
-    requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }));
-  }, []);
+
+    // Force scroll-to-latest repeatedly to beat late reflows in production.
+    requestAnimationFrame(() => {
+      forceScrollToLatest('auto');
+      requestAnimationFrame(() => forceScrollToLatest('auto'));
+
+      const delays = [80, 220, 500, 900];
+      delays.forEach((delay, idx) => {
+        const timer = setTimeout(() => {
+          forceScrollToLatest(idx === delays.length - 1 ? 'smooth' : 'auto');
+        }, delay);
+        backToLatestTimersRef.current.push(timer);
+      });
+    });
+  }, [forceScrollToLatest]);
 
   const jumpToMessage = useCallback(async (messageId) => {
     if (!messageId) return;
@@ -604,6 +637,7 @@ const Chat = () => {
     if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
     if (goalConfirmationTimer.current) clearTimeout(goalConfirmationTimer.current);
     if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
+    for (const t of backToLatestTimersRef.current) clearTimeout(t);
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
   }, []);
