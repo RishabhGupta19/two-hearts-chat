@@ -225,21 +225,47 @@ const Chat = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const reinforceBackStack = () => {
+      try {
+        // Keep at least two same-document entries so hardware back hits popstate first.
+        window.history.pushState({ __chatGuard: 1 }, '', window.location.href);
+        window.history.pushState({ __chatGuard: 2 }, '', window.location.href);
+      } catch (e) {}
+    };
+
     // When opened via notification, there may be no history stack at all.
     // Push two entries so back button always has something to pop.
+    reinforceBackStack();
+
+    // Notification navigation can finalize slightly after mount on some devices.
+    // Reinforce once again on next frame and shortly after.
+    let rafId = 0;
+    let timeoutId = 0;
     try {
-      window.history.pushState(null, '', window.location.href);
-      window.history.pushState(null, '', window.location.href);
+      rafId = window.requestAnimationFrame(() => reinforceBackStack());
+      timeoutId = window.setTimeout(() => reinforceBackStack(), 350);
     } catch (e) {}
+
+    const handlePageShow = () => {
+      reinforceBackStack();
+    };
 
     const handlePopState = () => {
       // Push again to prevent further back navigation closing the app
-      try { window.history.pushState(null, '', window.location.href); } catch (e) {}
+      reinforceBackStack();
       navigate('/dashboard');
     };
 
+    window.addEventListener('pageshow', handlePageShow);
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    return () => {
+      try {
+        if (rafId) window.cancelAnimationFrame(rafId);
+        if (timeoutId) window.clearTimeout(timeoutId);
+      } catch (e) {}
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, [navigate]);
 
   // Heartbeat to inform SW the app is active (reliable for PWAs)
@@ -250,11 +276,22 @@ const Chat = () => {
       } catch (e) {}
     };
 
-    // Send immediately on mount
+    // Send immediately
     sendHeartbeat();
 
-    // Send every 10 seconds to keep the flag alive
-    const interval = setInterval(sendHeartbeat, 10000);
+    // Also wait for SW to be ready in case controller is null on first load
+    try {
+      navigator.serviceWorker.ready.then(() => sendHeartbeat()).catch(() => {});
+    } catch (e) {}
+
+    // Keep alive every 8 seconds
+    const interval = setInterval(sendHeartbeat, 8000);
+
+    // Send on any user interaction — most reliable signal app is active
+    const onInteraction = () => sendHeartbeat();
+    document.addEventListener('touchstart', onInteraction, { passive: true });
+    document.addEventListener('click', onInteraction, { passive: true });
+    document.addEventListener('keydown', onInteraction, { passive: true });
 
     const handleVisibility = () => {
       try {
@@ -270,6 +307,9 @@ const Chat = () => {
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
+      document.removeEventListener('touchstart', onInteraction);
+      document.removeEventListener('click', onInteraction);
+      document.removeEventListener('keydown', onInteraction);
       try { navigator.serviceWorker.controller?.postMessage({ type: 'APP_INACTIVE' }); } catch (e) {}
     };
   }, []);
@@ -553,6 +593,9 @@ const Chat = () => {
       .filter(Boolean);
     if (unseenPartnerMsgIds.length > 0) {
       wsSend({ type: 'seen', message_ids: unseenPartnerMsgIds });
+      try {
+        navigator.serviceWorker.controller?.postMessage({ type: 'MSG_SEEN', message_ids: unseenPartnerMsgIds });
+      } catch (e) {}
       updateSeenIds(unseenPartnerMsgIds);
     }
   }, [currentMessages, connected, isCalm, updateSeenIds]);

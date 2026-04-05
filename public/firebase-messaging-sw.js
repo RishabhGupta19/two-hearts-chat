@@ -203,6 +203,8 @@ self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
 // Heartbeat flag for pages to signal they're active (more reliable on mobile PWAs)
 let appIsActive = false;
 let appActiveTimer = null;
+// Recently seen message ids (populated by pages via postMessage)
+const recentSeen = new Map();
 
 self.addEventListener('message', (event) => {
   try {
@@ -216,13 +218,28 @@ self.addEventListener('message', (event) => {
       appIsActive = true;
       if (appActiveTimer) clearTimeout(appActiveTimer);
       // Auto-expire in case the page closes without sending APP_INACTIVE
-      appActiveTimer = setTimeout(() => { appIsActive = false; }, 15000);
+      appActiveTimer = setTimeout(() => { appIsActive = false; }, 20000);
       return;
     }
 
     if (event.data?.type === 'APP_INACTIVE') {
       appIsActive = false;
       if (appActiveTimer) { clearTimeout(appActiveTimer); appActiveTimer = null; }
+      return;
+    }
+
+    if (event.data?.type === 'MSG_SEEN') {
+      try {
+        const ids = Array.isArray(event.data?.message_ids) ? event.data.message_ids : [];
+        for (const id of ids) {
+          const key = String(id);
+          recentSeen.set(key, Date.now());
+          // Auto-expire after 20s
+          setTimeout(() => recentSeen.delete(key), 20000);
+        }
+      } catch (err) {
+        // ignore
+      }
       return;
     }
   } catch (err) {
@@ -238,6 +255,24 @@ messaging.onBackgroundMessage(async (payload) => {
 
   // ✅ Use heartbeat flag — more reliable than clients.matchAll on mobile PWA
   if (appIsActive) return;
+
+  // Wait briefly to give any foreground client a chance to report the message as seen
+  const DELAY_MS = 1500;
+  const messageId = payload.data?.message_id || payload.data?.messageId || payload.data?.notification_id || null;
+  if (messageId) {
+    await new Promise((r) => setTimeout(r, DELAY_MS));
+    if (recentSeen.has(String(messageId))) return;
+  } else {
+    // No explicit id in payload: wait and then fall back to client and matchAll checks
+    await new Promise((r) => setTimeout(r, DELAY_MS));
+    if (appIsActive) return;
+    try {
+      const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+      if (allClients.length > 0) return;
+    } catch (e) {
+      // ignore matchAll errors
+    }
+  }
 
   const title = payload.data?.title || 'New message 💬';
   const body = payload.data?.body || '';
