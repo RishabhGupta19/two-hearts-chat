@@ -45,10 +45,19 @@ const seenRecently = (key) => {
 };
 
 messaging.onBackgroundMessage(async (payload) => {
+
   // If browser auto-delivers a notification payload, do not render manually.
   if (payload?.notification) {
     return;
   }
+
+  const visibleClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const hasVisibleClient = visibleClients.some((c) => c.visibilityState === 'visible');
+
+  if (hasVisibleClient) {
+    return;
+  }
+
 
   const title = payload.notification?.title || payload.data?.title || "New Message";
   const body = payload.notification?.body || payload.data?.body || "";
@@ -95,6 +104,12 @@ self.addEventListener('push', (event) => {
       try { data = { notification: { body: String(event.data) } }; } catch (_) { data = {}; }
     }
 
+    // FCM payloads are handled by messaging.onBackgroundMessage.
+    // Handling them again here can produce duplicate notifications.
+    if (data?.from || data?.fcmMessageId || data?.messageId || data?.data?.notification_id || data?.data?.message_id) {
+      return;
+    }
+
     // For notification payloads, browsers/FCM can auto-display system notifications.
     // Showing another one manually here can cause duplicates.
     if (data?.notification) return;
@@ -121,8 +136,8 @@ self.addEventListener('push', (event) => {
         ...(payload || {}),
         url: payload.url || '/#/chat',
       },
-      tag: payload.tag || String(dedupeKey || 'solace-message'),
-      renotify: true,
+      tag: String(dedupeKey || 'solace-message'),
+      renotify: false,
       vibrate: [200, 100, 200],
     };
 
@@ -152,3 +167,17 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
+
+  // Suppress Chrome's automatic "This site has been updated in the background"
+  // toast by responding to a skipWaiting message sent from the page.
+  self.addEventListener('message', (event) => {
+    try {
+      if (!event || !event.data) return;
+      if (event.data === 'skipWaiting') {
+        self.skipWaiting();
+      }
+    } catch (err) {
+      // Guard against unexpected message payloads
+      console.warn('SW message handler error', err);
+    }
+  });
