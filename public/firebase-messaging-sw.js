@@ -167,3 +167,17 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
+
+  // Suppress Chrome's automatic "This site has been updated in the background"
+  // toast by responding to a skipWaiting message sent from the page.
+  self.addEventListener('message', (event) => {
+    try {
+      if (!event || !event.data) return;
+      if (event.data === 'skipWaiting') {
+        self.skipWaiting();
+      }
+    } catch (err) {
+      // Guard against unexpected message payloads
+      console.warn('SW message handler error', err);
+    }
+  });
