@@ -210,10 +210,15 @@ messaging.onBackgroundMessage(async (payload) => {
   // Skip if browser auto-displays (has notification block)
   if (payload?.notification) return;
 
-  // Skip if app is visible — foreground handler manages in-app UI
-  const visibleClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-  const hasVisibleClient = visibleClients.some((c) => c.visibilityState === 'visible');
-  if (hasVisibleClient) return;
+  // ✅ Stronger check — any open window counts, not just visible ones
+  const allClients = await clients.matchAll({ 
+    type: 'window', 
+    includeUncontrolled: true 
+  });
+  
+  // If ANY window is open (focused, visible, or even hidden), skip
+  // The foreground onMessage handler manages in-app experience
+  if (allClients.length > 0) return;  // ← changed from visibilityState check
 
   const title = payload.data?.title || 'New message 💬';
   const body = payload.data?.body || '';
@@ -246,7 +251,9 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || '/#/chat';
+  const rawUrl = event.notification.data?.url || '/#/chat';
+  // Ensure we open an absolute URL so the SPA router mounts correctly.
+  const url = new URL(rawUrl, self.location.origin).href;
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const client of list) {

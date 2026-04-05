@@ -225,12 +225,15 @@ const Chat = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Ensure hardware back (popstate) navigates to dashboard instead of closing the PWA
+    // When opened via notification, there may be no history stack at all.
+    // Push two entries so back button always has something to pop.
     try {
+      window.history.pushState(null, '', window.location.href);
       window.history.pushState(null, '', window.location.href);
     } catch (e) {}
 
     const handlePopState = () => {
+      // Push again to prevent further back navigation closing the app
       try { window.history.pushState(null, '', window.location.href); } catch (e) {}
       navigate('/dashboard');
     };
