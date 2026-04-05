@@ -216,7 +216,7 @@ self.addEventListener('message', (event) => {
       appIsActive = true;
       if (appActiveTimer) clearTimeout(appActiveTimer);
       // Auto-expire in case the page closes without sending APP_INACTIVE
-      appActiveTimer = setTimeout(() => { appIsActive = false; }, 15000);
+      appActiveTimer = setTimeout(() => { appIsActive = false; }, 20000);
       return;
     }
 
@@ -238,6 +238,14 @@ messaging.onBackgroundMessage(async (payload) => {
 
   // ✅ Use heartbeat flag — more reliable than clients.matchAll on mobile PWA
   if (appIsActive) return;
+
+  // ✅ Fallback: also check clients.matchAll (sometimes works)
+  try {
+    const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (allClients.length > 0) return;
+  } catch (e) {
+    // ignore matchAll errors
+  }
 
   const title = payload.data?.title || 'New message 💬';
   const body = payload.data?.body || '';

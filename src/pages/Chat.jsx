@@ -250,11 +250,22 @@ const Chat = () => {
       } catch (e) {}
     };
 
-    // Send immediately on mount
+    // Send immediately
     sendHeartbeat();
 
-    // Send every 10 seconds to keep the flag alive
-    const interval = setInterval(sendHeartbeat, 10000);
+    // Also wait for SW to be ready in case controller is null on first load
+    try {
+      navigator.serviceWorker.ready.then(() => sendHeartbeat()).catch(() => {});
+    } catch (e) {}
+
+    // Keep alive every 8 seconds
+    const interval = setInterval(sendHeartbeat, 8000);
+
+    // Send on any user interaction — most reliable signal app is active
+    const onInteraction = () => sendHeartbeat();
+    document.addEventListener('touchstart', onInteraction, { passive: true });
+    document.addEventListener('click', onInteraction, { passive: true });
+    document.addEventListener('keydown', onInteraction, { passive: true });
 
     const handleVisibility = () => {
       try {
@@ -270,6 +281,9 @@ const Chat = () => {
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
+      document.removeEventListener('touchstart', onInteraction);
+      document.removeEventListener('click', onInteraction);
+      document.removeEventListener('keydown', onInteraction);
       try { navigator.serviceWorker.controller?.postMessage({ type: 'APP_INACTIVE' }); } catch (e) {}
     };
   }, []);
