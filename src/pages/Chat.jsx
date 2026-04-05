@@ -567,6 +567,9 @@ const Chat = () => {
       .filter(Boolean);
     if (unseenPartnerMsgIds.length > 0) {
       wsSend({ type: 'seen', message_ids: unseenPartnerMsgIds });
+      try {
+        navigator.serviceWorker.controller?.postMessage({ type: 'MSG_SEEN', message_ids: unseenPartnerMsgIds });
+      } catch (e) {}
       updateSeenIds(unseenPartnerMsgIds);
     }
   }, [currentMessages, connected, isCalm, updateSeenIds]);
