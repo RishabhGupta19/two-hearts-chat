@@ -225,12 +225,15 @@ const Chat = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Ensure hardware back (popstate) navigates to dashboard instead of closing the PWA
+    // When opened via notification, there may be no history stack at all.
+    // Push two entries so back button always has something to pop.
     try {
+      window.history.pushState(null, '', window.location.href);
       window.history.pushState(null, '', window.location.href);
     } catch (e) {}
 
     const handlePopState = () => {
+      // Push again to prevent further back navigation closing the app
       try { window.history.pushState(null, '', window.location.href); } catch (e) {}
       navigate('/dashboard');
     };
@@ -238,6 +241,38 @@ const Chat = () => {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [navigate]);
+
+  // Heartbeat to inform SW the app is active (reliable for PWAs)
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      try {
+        navigator.serviceWorker.controller?.postMessage({ type: 'APP_ACTIVE' });
+      } catch (e) {}
+    };
+
+    // Send immediately on mount
+    sendHeartbeat();
+
+    // Send every 10 seconds to keep the flag alive
+    const interval = setInterval(sendHeartbeat, 10000);
+
+    const handleVisibility = () => {
+      try {
+        if (document.visibilityState === 'visible') {
+          sendHeartbeat();
+        } else {
+          navigator.serviceWorker.controller?.postMessage({ type: 'APP_INACTIVE' });
+        }
+      } catch (e) {}
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      try { navigator.serviceWorker.controller?.postMessage({ type: 'APP_INACTIVE' }); } catch (e) {}
+    };
+  }, []);
 
   const isVent = mode === 'vent';
   const isCalm = mode === 'calm';
