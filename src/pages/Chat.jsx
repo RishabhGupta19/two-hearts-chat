@@ -225,21 +225,47 @@ const Chat = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const reinforceBackStack = () => {
+      try {
+        // Keep at least two same-document entries so hardware back hits popstate first.
+        window.history.pushState({ __chatGuard: 1 }, '', window.location.href);
+        window.history.pushState({ __chatGuard: 2 }, '', window.location.href);
+      } catch (e) {}
+    };
+
     // When opened via notification, there may be no history stack at all.
     // Push two entries so back button always has something to pop.
+    reinforceBackStack();
+
+    // Notification navigation can finalize slightly after mount on some devices.
+    // Reinforce once again on next frame and shortly after.
+    let rafId = 0;
+    let timeoutId = 0;
     try {
-      window.history.pushState(null, '', window.location.href);
-      window.history.pushState(null, '', window.location.href);
+      rafId = window.requestAnimationFrame(() => reinforceBackStack());
+      timeoutId = window.setTimeout(() => reinforceBackStack(), 350);
     } catch (e) {}
+
+    const handlePageShow = () => {
+      reinforceBackStack();
+    };
 
     const handlePopState = () => {
       // Push again to prevent further back navigation closing the app
-      try { window.history.pushState(null, '', window.location.href); } catch (e) {}
+      reinforceBackStack();
       navigate('/dashboard');
     };
 
+    window.addEventListener('pageshow', handlePageShow);
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    return () => {
+      try {
+        if (rafId) window.cancelAnimationFrame(rafId);
+        if (timeoutId) window.clearTimeout(timeoutId);
+      } catch (e) {}
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, [navigate]);
 
   // Heartbeat to inform SW the app is active (reliable for PWAs)
