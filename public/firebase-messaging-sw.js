@@ -200,8 +200,34 @@ self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
 
+// Heartbeat flag for pages to signal they're active (more reliable on mobile PWAs)
+let appIsActive = false;
+let appActiveTimer = null;
+
 self.addEventListener('message', (event) => {
-  if (event?.data === 'skipWaiting') self.skipWaiting();
+  try {
+    if (!event || !event.data) return;
+    if (event.data === 'skipWaiting') {
+      self.skipWaiting();
+      return;
+    }
+
+    if (event.data?.type === 'APP_ACTIVE') {
+      appIsActive = true;
+      if (appActiveTimer) clearTimeout(appActiveTimer);
+      // Auto-expire in case the page closes without sending APP_INACTIVE
+      appActiveTimer = setTimeout(() => { appIsActive = false; }, 15000);
+      return;
+    }
+
+    if (event.data?.type === 'APP_INACTIVE') {
+      appIsActive = false;
+      if (appActiveTimer) { clearTimeout(appActiveTimer); appActiveTimer = null; }
+      return;
+    }
+  } catch (err) {
+    console.warn('SW message handler error', err);
+  }
 });
 
 const messaging = firebase.messaging();
@@ -210,15 +236,8 @@ messaging.onBackgroundMessage(async (payload) => {
   // Skip if browser auto-displays (has notification block)
   if (payload?.notification) return;
 
-  // ✅ Stronger check — any open window counts, not just visible ones
-  const allClients = await clients.matchAll({ 
-    type: 'window', 
-    includeUncontrolled: true 
-  });
-  
-  // If ANY window is open (focused, visible, or even hidden), skip
-  // The foreground onMessage handler manages in-app experience
-  if (allClients.length > 0) return;  // ← changed from visibilityState check
+  // ✅ Use heartbeat flag — more reliable than clients.matchAll on mobile PWA
+  if (appIsActive) return;
 
   const title = payload.data?.title || 'New message 💬';
   const body = payload.data?.body || '';
@@ -227,7 +246,7 @@ messaging.onBackgroundMessage(async (payload) => {
     || payload.data?.messageId
     || `${title}::${body}`;
 
-  // ✅ Close ALL existing notifications before showing — nuclear dedup
+  // Close ALL existing notifications before showing — nuclear dedup
   const allNotifications = await self.registration.getNotifications();
   allNotifications.forEach((n) => n.close());
 
@@ -235,8 +254,8 @@ messaging.onBackgroundMessage(async (payload) => {
     body,
     icon: '/icon-192.png',
     badge: '/badge-72.png',
-    tag: String(tag),       // same tag = OS replaces, never stacks
-    renotify: false,        // no duplicate sound/vibration
+    tag: String(tag),
+    renotify: false,
     data: {
       url: payload.data?.url || '/#/chat',
       ...(payload.data || {}),

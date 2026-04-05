@@ -242,6 +242,38 @@ const Chat = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [navigate]);
 
+  // Heartbeat to inform SW the app is active (reliable for PWAs)
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      try {
+        navigator.serviceWorker.controller?.postMessage({ type: 'APP_ACTIVE' });
+      } catch (e) {}
+    };
+
+    // Send immediately on mount
+    sendHeartbeat();
+
+    // Send every 10 seconds to keep the flag alive
+    const interval = setInterval(sendHeartbeat, 10000);
+
+    const handleVisibility = () => {
+      try {
+        if (document.visibilityState === 'visible') {
+          sendHeartbeat();
+        } else {
+          navigator.serviceWorker.controller?.postMessage({ type: 'APP_INACTIVE' });
+        }
+      } catch (e) {}
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      try { navigator.serviceWorker.controller?.postMessage({ type: 'APP_INACTIVE' }); } catch (e) {}
+    };
+  }, []);
+
   const isVent = mode === 'vent';
   const isCalm = mode === 'calm';
   const wsEnabled = isCalm && isLinked && !!coupleId && String(coupleId) !== 'undefined';
