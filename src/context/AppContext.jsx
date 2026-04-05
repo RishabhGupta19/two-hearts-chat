@@ -161,11 +161,17 @@ export const AppProvider = ({ children }) => {
   const syncUserState = (user) => {
     const userProfilePic = user.profile_picture_url || user.profile_pic_url || null;
     const partnerProfilePic = user.partner_profile_picture_url || user.partner_profile_pic_url || null;
-    
-    // Save profile pics to localStorage for persistence
-    if (userProfilePic) localStorage.setItem('userProfilePic', userProfilePic);
-    if (partnerProfilePic) localStorage.setItem('partnerProfilePic', partnerProfilePic);
-    
+
+    // Persist or clear profile pics in localStorage based on backend truth
+    try {
+      if (userProfilePic) localStorage.setItem('userProfilePic', userProfilePic);
+      else localStorage.removeItem('userProfilePic');
+      if (partnerProfilePic) localStorage.setItem('partnerProfilePic', partnerProfilePic);
+      else localStorage.removeItem('partnerProfilePic');
+    } catch (e) {
+      // ignore storage errors
+    }
+
     setState((s) => ({
       ...s,
       isAuthenticated: true,
@@ -183,9 +189,9 @@ export const AppProvider = ({ children }) => {
       isLinked: user.is_linked || false,
       assessmentCompleted: user.assessment_completed || false,
       assessmentProfile: user.assessment_profile || null,
-      // Use from backend if available, otherwise fall back to localStorage
-      userProfilePic: userProfilePic || s.userProfilePic || localStorage.getItem('userProfilePic'),
-      partnerProfilePic: partnerProfilePic || s.partnerProfilePic || localStorage.getItem('partnerProfilePic'),
+      // Use backend-provided pics (no silent fallback to previous session)
+      userProfilePic: userProfilePic,
+      partnerProfilePic: partnerProfilePic,
       loading: false,
     }));
   };
