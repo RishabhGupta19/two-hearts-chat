@@ -4,6 +4,32 @@ import { supabase } from '@/integrations/supabase/supabaseClient';
 import { requestNotificationPermission, subscribeToForegroundMessages } from '@/firebase';
 
 const AppContext = createContext(null);
+const MUSIC_STATE_STORAGE_KEY = 'music_player_state_v1';
+
+const readPersistedMusicState = () => {
+  if (typeof localStorage === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(MUSIC_STATE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    return {
+      currentSong: parsed.currentSong || null,
+      currentQueue: Array.isArray(parsed.currentQueue) ? parsed.currentQueue : [],
+      currentIndex: Number.isFinite(parsed.currentIndex) ? parsed.currentIndex : 0,
+      musicWasPlaying: Boolean(parsed.musicWasPlaying),
+      musicPosition: Number.isFinite(parsed.musicPosition) ? parsed.musicPosition : 0,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const persistedMusicState = readPersistedMusicState();
 
 export const useApp = () => {
   const ctx = useContext(AppContext);
@@ -29,9 +55,11 @@ const defaultState = {
   mode: localStorage.getItem('chat_mode') || 'calm',
   messages: [],
   goals: [],
-  currentSong: null,
-  currentQueue: [],
-  currentIndex: 0,
+  currentSong: persistedMusicState?.currentSong || null,
+  currentQueue: persistedMusicState?.currentQueue || [],
+  currentIndex: persistedMusicState?.currentIndex || 0,
+  musicWasPlaying: persistedMusicState?.musicWasPlaying || false,
+  musicPosition: persistedMusicState?.musicPosition || 0,
   loading: true,
 };
 
@@ -702,6 +730,8 @@ export const AppProvider = ({ children }) => {
       currentSong: song,
       currentQueue: normalizedQueue,
       currentIndex: index >= 0 ? index : 0,
+      musicWasPlaying: true,
+      musicPosition: 0,
     }));
   }, []);
 
@@ -713,6 +743,8 @@ export const AppProvider = ({ children }) => {
         ...s,
         currentIndex: nextIndex,
         currentSong: s.currentQueue[nextIndex] || s.currentSong,
+        musicPosition: 0,
+        musicWasPlaying: true,
       };
     });
   }, []);
@@ -725,8 +757,18 @@ export const AppProvider = ({ children }) => {
         ...s,
         currentIndex: prevIndex,
         currentSong: s.currentQueue[prevIndex] || s.currentSong,
+        musicPosition: 0,
+        musicWasPlaying: true,
       };
     });
+  }, []);
+
+  const updateMusicPlayback = useCallback(({ isPlaying, currentTime }) => {
+    setState((s) => ({
+      ...s,
+      musicWasPlaying: typeof isPlaying === 'boolean' ? isPlaying : s.musicWasPlaying,
+      musicPosition: Number.isFinite(currentTime) ? currentTime : s.musicPosition,
+    }));
   }, []);
 
   const closeMusicPlayer = useCallback(() => {
@@ -735,8 +777,34 @@ export const AppProvider = ({ children }) => {
       currentSong: null,
       currentQueue: [],
       currentIndex: 0,
+      musicWasPlaying: false,
+      musicPosition: 0,
     }));
   }, []);
+
+  useEffect(() => {
+    if (typeof localStorage === 'undefined') return;
+
+    if (!state.currentSong) {
+      localStorage.removeItem(MUSIC_STATE_STORAGE_KEY);
+      return;
+    }
+
+    try {
+      localStorage.setItem(
+        MUSIC_STATE_STORAGE_KEY,
+        JSON.stringify({
+          currentSong: state.currentSong,
+          currentQueue: state.currentQueue,
+          currentIndex: state.currentIndex,
+          musicWasPlaying: state.musicWasPlaying,
+          musicPosition: state.musicPosition,
+        })
+      );
+    } catch {
+      // ignore storage errors
+    }
+  }, [state.currentSong, state.currentQueue, state.currentIndex, state.musicWasPlaying, state.musicPosition]);
 
   return (
     <AppContext.Provider
@@ -770,6 +838,7 @@ export const AppProvider = ({ children }) => {
         playNextTrack,
         playPrevTrack,
         closeMusicPlayer,
+        updateMusicPlayback,
         deleteMessage,
         searchMessages,
         fetchMessageContext,

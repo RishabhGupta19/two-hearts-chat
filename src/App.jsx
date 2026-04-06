@@ -92,7 +92,17 @@ if (!onboardingComplete) {
 };
 
 const GlobalMusicPlayer = () => {
-  const { currentSong, currentQueue, currentIndex, playNextTrack, playPrevTrack, closeMusicPlayer } = useApp();
+  const {
+    currentSong,
+    currentQueue,
+    currentIndex,
+    musicWasPlaying,
+    musicPosition,
+    playNextTrack,
+    playPrevTrack,
+    closeMusicPlayer,
+    updateMusicPlayback,
+  } = useApp();
   const location = useLocation();
   const showPlayerUi = location.pathname === "/music";
 
@@ -103,6 +113,9 @@ const GlobalMusicPlayer = () => {
           visible={showPlayerUi}
           song={currentSong}
           queue={currentQueue}
+          autoPlay={musicWasPlaying}
+          initialSeekTime={musicPosition}
+          onPlaybackStateChange={updateMusicPlayback}
           onClose={closeMusicPlayer}
           onPlayNext={currentIndex < currentQueue.length - 1 ? playNextTrack : null}
           onPlayPrev={currentIndex > 0 ? playPrevTrack : null}
