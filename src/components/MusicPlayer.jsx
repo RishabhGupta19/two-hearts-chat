@@ -24,7 +24,17 @@ const loadYTApi = () => {
 // ────────────────────────────────────────────────────────────
 // MusicPlayer Component
 // ────────────────────────────────────────────────────────────
-const MusicPlayer = ({ song, queue = [], onClose, onPlayNext, onPlayPrev, visible = true }) => {
+const MusicPlayer = ({
+  song,
+  queue = [],
+  onClose,
+  onPlayNext,
+  onPlayPrev,
+  visible = true,
+  autoPlay = true,
+  initialSeekTime = 0,
+  onPlaybackStateChange,
+}) => {
   const playerContainerRef = useRef(null);
   const playerRef = useRef(null);
   const progressIntervalRef = useRef(null);
@@ -97,8 +107,21 @@ const MusicPlayer = ({ song, queue = [], onClose, onPlayNext, onPlayPrev, visibl
         },
         events: {
           onReady: (e) => {
-            e.target.playVideo();
-            setIsPlaying(true);
+            if ((initialSeekTime || 0) > 0) {
+              try {
+                e.target.seekTo(initialSeekTime, true);
+                setCurrentTime(initialSeekTime);
+              } catch {
+                // ignore seek errors on initialization
+              }
+            }
+
+            if (autoPlay) {
+              e.target.playVideo();
+              setIsPlaying(true);
+            } else {
+              setIsPlaying(false);
+            }
             startPolling();
           },
           onStateChange: (e) => {
@@ -129,7 +152,11 @@ const MusicPlayer = ({ song, queue = [], onClose, onPlayNext, onPlayPrev, visibl
       destroyed = true;
       stopPolling();
     };
-  }, [song?.videoId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [song?.videoId, autoPlay, initialSeekTime]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    onPlaybackStateChange?.({ isPlaying, currentTime });
+  }, [isPlaying, currentTime, onPlaybackStateChange]);
 
   // ── Cleanup on unmount ───────────────────────────────────
   useEffect(() => {
