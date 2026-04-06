@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Pause } from 'lucide-react';
 
@@ -11,7 +11,7 @@ import { Play, Pause } from 'lucide-react';
  *  seen     – bool
  *  isCalm   – bool (show seen ticks only in calm mode)
  */
-export const VoiceBubble = ({ message, isMine, seen, isCalm }) => {
+const VoiceBubbleComponent = ({ message, isMine, seen, isCalm }) => {
   const [playing, setPlaying]       = useState(false);
   const [progress, setProgress]     = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -258,3 +258,5 @@ export const VoiceBubble = ({ message, isMine, seen, isCalm }) => {
     </motion.div>
   );
 };
+
+export const VoiceBubble = memo(VoiceBubbleComponent);

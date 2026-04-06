@@ -9,18 +9,6 @@ export const useVoiceRecorder = () => {
     const chunksRef = useRef([]);
     const timerRef = useRef(null);
 
-    const pickMimeType = () => {
-        if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) {
-            return '';
-        }
-        const candidates = [
-            'audio/webm;codecs=opus',
-            'audio/webm',
-            'audio/ogg;codecs=opus',
-        ];
-        return candidates.find((t) => MediaRecorder.isTypeSupported(t)) || '';
-    };
-
     const startRecording = async () => {
         const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
@@ -32,11 +20,12 @@ export const useVoiceRecorder = () => {
             },
         });
 
-        const mimeType = pickMimeType();
-        const recorderOptions = {
-            audioBitsPerSecond: 24000,
-            ...(mimeType ? { mimeType } : {}),
-        };
+        const recorderOptions =
+            typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported?.('audio/webm;codecs=opus')
+                ? { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 32000 }
+                : typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported?.('audio/ogg;codecs=opus')
+                ? { mimeType: 'audio/ogg;codecs=opus', audioBitsPerSecond: 32000 }
+                : {};
         const mediaRecorder = new MediaRecorder(stream, recorderOptions);
         mediaRecorderRef.current = mediaRecorder;
         chunksRef.current = [];
@@ -45,7 +34,7 @@ export const useVoiceRecorder = () => {
             if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
         };
         mediaRecorder.onstop = () => {
-            const blobType = mimeType || chunksRef.current?.[0]?.type || 'audio/webm';
+            const blobType = recorderOptions.mimeType || chunksRef.current?.[0]?.type || 'audio/webm';
             const blob = new Blob(chunksRef.current, { type: blobType });
             setAudioBlob(blob);
             stream.getTracks().forEach(t => t.stop());

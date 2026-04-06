@@ -49,7 +49,9 @@ export const formatDateLabel = (dateKey) => {
  * Props:
  *   label  – string  e.g. "Today" | "Yesterday" | "Mon, 24 Mar"
  */
-export const DateSeparator = ({ label }) => (
+import { memo } from 'react';
+
+const DateSeparatorComponent = ({ label }) => (
   <motion.div
     key={label}
     initial={{ opacity: 0, y: -6 }}
@@ -70,3 +72,5 @@ export const DateSeparator = ({ label }) => (
     </span>
   </motion.div>
 );
+
+export const DateSeparator = memo(DateSeparatorComponent);

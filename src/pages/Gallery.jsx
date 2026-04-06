@@ -13,6 +13,21 @@ const Gallery = () => {
   const { user, coupleId } = useApp();
   const fileInputRef = useRef(null);
 
+  useEffect(() => {
+    // Ensure hardware back (popstate) navigates to dashboard instead of closing the PWA
+    try {
+      window.history.pushState(null, '', window.location.href);
+    } catch (e) {}
+
+    const handlePopState = () => {
+      try { window.history.pushState(null, '', window.location.href); } catch (e) {}
+      navigate('/dashboard');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [navigate]);
+
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);

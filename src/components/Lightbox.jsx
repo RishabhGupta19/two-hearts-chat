@@ -8,7 +8,7 @@ const Lightbox = ({ photo, onClose }) => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={onClose}
-      className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[1000] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
@@ -17,12 +17,13 @@ const Lightbox = ({ photo, onClose }) => {
         onClick={(e) => e.stopPropagation()}
         className="relative w-full h-full max-w-4xl max-h-[90vh]"
       >
-        {/* Close Button */}
+        {/* Close Button (inside viewport) */}
         <button
           onClick={onClose}
-          className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors z-10"
+          className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-20 bg-black/50 rounded-full p-2"
+          aria-label="Close"
         >
-          <X className="h-6 w-6" />
+          <X className="h-5 w-5" />
         </button>
 
         {/* Image */}

@@ -4,11 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/context/AppContext';
 import { Copy, Check, X, Heart, Users, UserPlus, Loader2, Link } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
+import ProfilePicUpload from '@/components/ProfilePicUpload';
+import api from '@/api';
 
 const Dashboard = () => {
   const state = useApp();
-  const { userName, partnerName, isLinked, logout, generateCoupleId, linkPartner } = state;
+  const { userName, partnerName, isLinked, logout, generateCoupleId, linkPartner, userProfilePic } = state;
   const navigate = useNavigate();
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -23,6 +26,9 @@ const Dashboard = () => {
   const [linkCopied, setLinkCopied] = useState(false);
 
   const displayCode = state.coupleId || state.user?.couple_code;
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [nicknameInput, setNicknameInput] = useState(state.nickname || '');
+  const [savingNickname, setSavingNickname] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(state.user.couple_code);
@@ -87,15 +93,19 @@ const Dashboard = () => {
         <h1 className="font-heading text-xl font-bold text-foreground">Solace</h1>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium text-primary">
-              {userName.charAt(0).toUpperCase()}
-            </div>
+            <button
+              onClick={() => setShowProfileModal(true)}
+              className="h-8 w-8 rounded-full overflow-hidden flex items-center justify-center bg-primary/20"
+              aria-label="Open profile"
+            >
+              {userProfilePic ? (
+                <img src={userProfilePic} alt={userName} className="h-full w-full object-contain object-center block p-0.5" />
+              ) : (
+                <span className="text-sm font-medium text-primary">{userName.charAt(0).toUpperCase()}</span>
+              )}
+            </button>
             <span className="text-sm font-body text-foreground hidden sm:block">{userName}</span>
-            
           </div>
-          <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground font-body">
-            Logout
-          </button>
         </div>
       </header>
 
@@ -310,6 +320,81 @@ const Dashboard = () => {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Profile Modal (upload / logout) */}
+      <AnimatePresence>
+        {showProfileModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+            onClick={() => setShowProfileModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-card border border-border rounded-xl p-5 shadow-lg w-80 relative"
+            >
+              <button onClick={() => setShowProfileModal(false)} className="absolute top-3 right-3 text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="text-center mb-3">
+                <h3 className="font-heading text-base font-semibold text-foreground">Your Profile</h3>
+                <p className="text-xs text-muted-foreground">Upload or update your profile picture</p>
+              </div>
+
+              <div className="flex items-center justify-center">
+                <ProfilePicUpload currentImage={state.userProfilePic} userName={userName} />
+              </div>
+
+              <div className="mt-4">
+                <label className="text-xs text-muted-foreground mb-1 block">Nickname</label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    value={nicknameInput}
+                    onChange={(e) => setNicknameInput(e.target.value)}
+                    disabled={savingNickname}
+                    className="flex-1 min-w-0 rounded-md border border-border px-3 py-2 bg-card text-foreground text-sm disabled:opacity-60"
+                    placeholder="Enter a nickname"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        setSavingNickname(true);
+                        await api.put('/auth/profile', { nickname: nicknameInput });
+                        await state.fetchUser();
+                        toast.success('Nickname updated');
+                      } catch (err) {
+                        toast.error(err?.response?.data?.error || err.message || 'Failed to update nickname');
+                      } finally {
+                        setSavingNickname(false);
+                      }
+                    }}
+                    disabled={savingNickname}
+                    className="w-20 shrink-0 flex items-center justify-center rounded-md bg-primary px-2 py-2 text-sm text-primary-foreground"
+                  >
+                    {savingNickname ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 border-t border-border pt-3 flex flex-col gap-2">
+                <button
+                  onClick={() => { setShowProfileModal(false); logout(); }}
+                  className="w-full rounded-md px-3 py-2 text-sm font-medium text-destructive bg-destructive/10 hover:bg-destructive/20"
+                >
+                  Logout
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

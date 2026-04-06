@@ -8,35 +8,55 @@ export default function ProfilePicUpload({ currentImage, userName }) {
   const { updateProfilePic } = useApp();
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
+  const [previewSrc, setPreviewSrc] = useState(null);
+  const [pendingFile, setPendingFile] = useState(null);
 
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     // Reset input
     if (fileInputRef.current) fileInputRef.current.value = '';
 
-    // Validate file
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
+    // Validate file (basic)
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      toast.error('Please select a JPG, PNG or WebP image');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image must be smaller than 2MB');
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be smaller than 5MB');
-      return;
-    }
+    // Create preview and hold pending file until user confirms
+    const url = URL.createObjectURL(file);
+    setPreviewSrc(url);
+    setPendingFile(file);
+  };
 
+  const confirmUpload = async () => {
+    if (!pendingFile) return;
     try {
       setUploading(true);
-      await updateProfilePic(file);
+      await updateProfilePic(pendingFile);
       toast.success('Profile picture updated! 📸');
+      setPreviewSrc(null);
+      setPendingFile(null);
     } catch (err) {
       console.error('Upload failed:', err);
       toast.error(err.message || 'Failed to update profile picture');
     } finally {
       setUploading(false);
+      if (previewSrc) {
+        URL.revokeObjectURL(previewSrc);
+      }
     }
+  };
+
+  const cancelPreview = () => {
+    if (previewSrc) URL.revokeObjectURL(previewSrc);
+    setPreviewSrc(null);
+    setPendingFile(null);
   };
 
   return (
@@ -46,12 +66,10 @@ export default function ProfilePicUpload({ currentImage, userName }) {
         className="relative"
       >
         <div className="h-20 w-20 rounded-full bg-primary/20 flex items-center justify-center text-3xl font-medium text-primary overflow-hidden border-2 border-primary/30">
-          {currentImage ? (
-            <img
-              src={currentImage}
-              alt={userName}
-              className="h-full w-full object-cover"
-            />
+          {previewSrc ? (
+            <img src={previewSrc} alt="preview" className="h-full w-full object-contain object-center block p-0.5" />
+          ) : currentImage ? (
+            <img src={currentImage} alt={userName} className="h-full w-full object-contain object-center block p-0.5" />
           ) : (
             <span>{(userName || 'U').charAt(0).toUpperCase()}</span>
           )}
@@ -81,9 +99,28 @@ export default function ProfilePicUpload({ currentImage, userName }) {
         disabled={uploading}
       />
 
-      <p className="text-xs text-muted-foreground text-center">
-        {uploading ? 'Uploading...' : 'Click the camera icon to change your profile picture'}
-      </p>
+      {previewSrc ? (
+        <div className="flex gap-2 mt-2">
+          <button
+            type="button"
+            onClick={confirmUpload}
+            disabled={uploading}
+            className="rounded-pill bg-primary px-3 py-1 text-xs text-primary-foreground"
+          >
+            {uploading ? 'Uploading...' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={cancelPreview}
+            disabled={uploading}
+            className="rounded-pill px-3 py-1 text-xs bg-muted text-muted-foreground"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        null
+      )}
     </div>
   );
 }
