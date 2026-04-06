@@ -9,11 +9,22 @@ import { VoiceBubble } from '@/components/VoiceBubble';
 import { DateSeparator, toISTDateKey, formatDateLabel } from '@/components/DateSeparator';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { ResolutionModal } from '@/components/ResolutionModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ModeWrapper } from '@/components/ModeWrapper';
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
-import { Loader2, Link2Off, ArrowLeft, Mic, MicOff, X, Send, Play, Pause } from 'lucide-react';
+import { Loader2, Link2Off, ArrowLeft, Mic, X, Send, Play, Pause, Search } from 'lucide-react';
+import Lightbox from '@/components/Lightbox';
 import { toast } from 'sonner';
 import { friendlyError } from '@/utils/errorMessages';
 import api from '@/api';
@@ -36,7 +47,11 @@ const Chat = () => {
     mode, setMode, currentMessages, sendMessage, fetchMessages,
     partnerName, addGoal, resolveVent, isLinked, coupleId,
     userName, userRole, user, addWsMessage, removeMessageByTempId, loadOlderMessages,
+    deleteMessage, searchMessages, fetchMessageContext,
   } = useApp();
+
+  // pull partner avatar from context (kept in AppContext)
+  const { partnerProfilePic } = useApp();
 
   const resolvedRole = userRole || user?.role || '';
   const [input, setInput] = useState('');
@@ -55,13 +70,46 @@ const Chat = () => {
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [previewProgress, setPreviewProgress] = useState(0);
   const [previewCurrentTime, setPreviewCurrentTime] = useState(0);
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearch, setShowSearch] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [focusedMessages, setFocusedMessages] = useState(null);
+  const [focusedTargetId, setFocusedTargetId] = useState(null);
   const previewAudioRef = useRef(null);
   const previewAnimRef = useRef(null);
+  const searchDebounceRef = useRef(null);
+  const highlightTimerRef = useRef(null);
+  const currentMessagesRef = useRef([]);
+  const messageRefs = useRef({});
+  const searchContainerRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const [showPartnerLightbox, setShowPartnerLightbox] = useState(false);
+  const inputRef = useRef(null);
+  const [layoutReady, setLayoutReady] = useState(false);
+
+  useEffect(() => {
+    // On notification cold start the viewport height isn't settled yet.
+    // A short delay lets the browser finalize chrome/safe-area before first paint.
+    const t = setTimeout(() => {
+      try {
+        document.documentElement.style.setProperty('--real-vh', window.innerHeight + 'px');
+      } catch (e) {}
+      setLayoutReady(true);
+    }, 80);
+    return () => clearTimeout(t);
+  }, []);
 
   const { recording, audioBlob, duration, startRecording, stopRecording, cancelRecording, setAudioBlob } = useVoiceRecorder();
 
   const fmtDuration = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
+
+  useEffect(() => {
+    currentMessagesRef.current = currentMessages;
+  }, [currentMessages]);
   // Create / revoke blob URL for preview — must be STATE so re-render gives audio element the src
   const [previewSrc, setPreviewSrc] = useState(null);
   const prevPreviewSrc = useRef(null);  // track for cleanup only
@@ -114,6 +162,27 @@ const Chat = () => {
   const handleSendVoice = useCallback(async () => {
     if (!audioBlob) return;
     setSendingVoice(true);
+
+    // Show voice message instantly with a local blob URL while upload is in-flight.
+    const localUrl = URL.createObjectURL(audioBlob);
+    const tempId = `tmp_voice_${Date.now()}`;
+    addWsMessage({
+      id: tempId,
+      local_key: tempId,
+      client_temp_id: tempId,
+      type: 'voice',
+      audio_url: localUrl,
+      duration,
+      sender: 'user',
+      sender_name: userName,
+      sender_role: resolvedRole,
+      sender_id: user?.id || '',
+      timestamp: new Date().toISOString(),
+      isMine: true,
+      pending: true,
+    });
+    setAudioBlob(null);
+
     try {
       const voiceExt = audioBlob.type.includes('ogg') ? 'ogg' : 'webm';
       const formData = new FormData();
@@ -123,15 +192,15 @@ const Chat = () => {
       const { data: voiceMsg } = await api.post('/messages/voice', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      // addWsMessage normalizes and adds message to state
+      removeMessageByTempId(tempId);
       addWsMessage({ ...voiceMsg, isMine: true });
-      setAudioBlob(null);
     } catch (e) {
+      removeMessageByTempId(tempId);
       toast.error('Failed to send voice message');
     } finally {
       setSendingVoice(false);
     }
-  }, [audioBlob, duration, mode, addWsMessage, setAudioBlob]);
+  }, [audioBlob, duration, mode, addWsMessage, removeMessageByTempId, setAudioBlob, userName, resolvedRole, user]);
 
   // ✅ 1. seenMessageIds state first
   const [seenMessageIds, setSeenMessageIds] = useState(() => {
@@ -150,12 +219,228 @@ const Chat = () => {
   const hasMoreRef = useRef(true);
   const suppressAutoScrollRef = useRef(false);
   const shouldRestoreScrollRef = useRef(null);
+  const scrollDebounceRef = useRef(null);  // Debounce timer for scroll events
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [scrollReady, setScrollReady] = useState(false);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const reinforceBackStack = () => {
+      try {
+        // Keep at least two same-document entries so hardware back hits popstate first.
+        window.history.pushState({ __chatGuard: 1 }, '', window.location.href);
+        window.history.pushState({ __chatGuard: 2 }, '', window.location.href);
+      } catch (e) {}
+    };
+
+    // When opened via notification, there may be no history stack at all.
+    // Push two entries so back button always has something to pop.
+    reinforceBackStack();
+
+    // Notification navigation can finalize slightly after mount on some devices.
+    // Reinforce once again on next frame and shortly after.
+    let rafId = 0;
+    let timeoutId = 0;
+    try {
+      rafId = window.requestAnimationFrame(() => reinforceBackStack());
+      timeoutId = window.setTimeout(() => reinforceBackStack(), 350);
+    } catch (e) {}
+
+    const handlePageShow = () => {
+      reinforceBackStack();
+    };
+
+    const handlePopState = () => {
+      // Push again to prevent further back navigation closing the app
+      reinforceBackStack();
+      navigate('/dashboard');
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      try {
+        if (rafId) window.cancelAnimationFrame(rafId);
+        if (timeoutId) window.clearTimeout(timeoutId);
+      } catch (e) {}
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [navigate]);
+
+  // Heartbeat to inform SW the app is active (reliable for PWAs)
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      try {
+        navigator.serviceWorker.controller?.postMessage({ type: 'APP_ACTIVE' });
+      } catch (e) {}
+    };
+
+    // Send immediately
+    sendHeartbeat();
+
+    // Also wait for SW to be ready in case controller is null on first load
+    try {
+      navigator.serviceWorker.ready.then(() => sendHeartbeat()).catch(() => {});
+    } catch (e) {}
+
+    // Keep alive every 8 seconds
+    const interval = setInterval(sendHeartbeat, 8000);
+
+    // Send on any user interaction — most reliable signal app is active
+    const onInteraction = () => sendHeartbeat();
+    document.addEventListener('touchstart', onInteraction, { passive: true });
+    document.addEventListener('click', onInteraction, { passive: true });
+    document.addEventListener('keydown', onInteraction, { passive: true });
+
+    const handleVisibility = () => {
+      try {
+        if (document.visibilityState === 'visible') {
+          sendHeartbeat();
+        } else {
+          navigator.serviceWorker.controller?.postMessage({ type: 'APP_INACTIVE' });
+        }
+      } catch (e) {}
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      document.removeEventListener('touchstart', onInteraction);
+      document.removeEventListener('click', onInteraction);
+      document.removeEventListener('keydown', onInteraction);
+      try { navigator.serviceWorker.controller?.postMessage({ type: 'APP_INACTIVE' }); } catch (e) {}
+    };
+  }, []);
+
   const isVent = mode === 'vent';
   const isCalm = mode === 'calm';
-  const wsEnabled = isCalm && isLinked && !!coupleId;
+  const wsEnabled = isCalm && isLinked && !!coupleId && String(coupleId) !== 'undefined';
+  const isFocusedView = Array.isArray(focusedMessages);
+
+  const isWithinDeleteWindow = useCallback((message) => {
+    if (!message?.timestamp) return false;
+    const ts = Date.parse(message.timestamp);
+    if (Number.isNaN(ts)) return false;
+    return Date.now() - ts <= 24 * 60 * 60 * 1000;
+  }, []);
+
+  const registerMessageRef = useCallback((id, node) => {
+    if (!id) return;
+    if (node) messageRefs.current[id] = node;
+    else delete messageRefs.current[id];
+  }, []);
+
+  const applyTemporaryHighlight = useCallback((messageId) => {
+    if (!messageId) return;
+    setHighlightedMessageId(String(messageId));
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => setHighlightedMessageId(null), 2500);
+  }, []);
+
+  const openFocusedThread = useCallback(async (messageId) => {
+    if (!isCalm || !messageId) return;
+    try {
+      const data = await fetchMessageContext({ messageId, mode, window: 6 });
+      if (!data?.messages?.length) {
+        toast.info('Could not load message context');
+        return;
+      }
+      setFocusedMessages(data.messages);
+      setFocusedTargetId(String(data.targetId || messageId));
+      setShowSearch(false);
+      setSearchQuery('');
+      setSearchResults([]);
+    } catch (e) {
+      toast.error(friendlyError(e));
+    }
+  }, [fetchMessageContext, isCalm, mode]);
+
+  const backToLatestMessages = useCallback(() => {
+    setFocusedMessages(null);
+    setFocusedTargetId(null);
+    requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }));
+  }, []);
+
+  const jumpToMessage = useCallback(async (messageId) => {
+    if (!messageId) return;
+    const targetId = String(messageId);
+
+    const scrollToKnownNode = () => {
+      const node = messageRefs.current[targetId];
+      if (!node) return false;
+      node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      applyTemporaryHighlight(targetId);
+      return true;
+    };
+
+    if (scrollToKnownNode()) return;
+
+    if (!hasMoreRef.current || loadingOlderRef.current) {
+      toast.info('Original message is not available in loaded history');
+      return;
+    }
+
+    let loops = 0;
+    while (loops < 12 && hasMoreRef.current) {
+      loops += 1;
+      const oldestMessage = currentMessagesRef.current[0];
+      const before = oldestMessage?.timestamp || null;
+      if (!before) break;
+
+      loadingOlderRef.current = true;
+      setLoadingOlder(true);
+      try {
+        const meta = await loadOlderMessages(mode, before);
+        hasMoreRef.current = Boolean(meta?.hasMore);
+      } finally {
+        loadingOlderRef.current = false;
+        setLoadingOlder(false);
+      }
+
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (scrollToKnownNode()) return;
+    }
+
+    toast.info('Original message could not be found in available history');
+  }, [applyTemporaryHighlight, loadOlderMessages, mode]);
+
+  useEffect(() => {
+    if (!isFocusedView || !focusedTargetId) return;
+    requestAnimationFrame(() => {
+      const node = messageRefs.current[String(focusedTargetId)];
+      if (!node) return;
+      node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      applyTemporaryHighlight(String(focusedTargetId));
+    });
+  }, [focusedMessages, focusedTargetId, isFocusedView, applyTemporaryHighlight]);
+
+  const handleDeleteMessage = useCallback(async (message) => {
+    if (!message?.id || !message?.isMine || message?.is_deleted || !isWithinDeleteWindow(message)) return;
+    setDeleteTarget(message);
+  }, [isWithinDeleteWindow]);
+
+  const confirmDeleteMessage = useCallback(async () => {
+    if (!deleteTarget?.id) return;
+    try {
+      // Preserve user's current scroll position so deleting a message
+      // doesn't yank them back to the latest messages.
+      const el = chatScrollRef.current;
+      if (el) {
+        shouldRestoreScrollRef.current = {
+          previousScrollHeight: el.scrollHeight,
+          previousScrollTop: el.scrollTop,
+        };
+        suppressAutoScrollRef.current = true;
+      }
+      await deleteMessage(deleteTarget.id);
+    } catch (e) {
+      toast.error(friendlyError(e));
+    } finally {
+      setDeleteTarget(null);
+    }
+  }, [deleteMessage, deleteTarget]);
 
   const showGoalConfirmation = useCallback((message) => {
     if (goalConfirmationTimer.current) clearTimeout(goalConfirmationTimer.current);
@@ -251,30 +536,42 @@ const Chat = () => {
   }, [currentMessages]);
 
   const handleScroll = useCallback(() => {
+    if (isFocusedView) return;
     const el = chatScrollRef.current;
     if (!el) return;
-    if (el.scrollTop > 60) return;
-    if (loadingOlderRef.current) return;
-    if (!hasMoreRef.current) return;
+    // Prefetch before user reaches the very top for smoother infinite scroll.
+    if (el.scrollTop > 200) return;
 
-    loadingOlderRef.current = true;
-    suppressAutoScrollRef.current = true;
-    const previousScrollHeight = el.scrollHeight;
-    const previousScrollTop = el.scrollTop;
+    // Debounce scroll events to avoid rapid API calls (150ms)
+    if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
+    scrollDebounceRef.current = setTimeout(() => {
+      if (loadingOlderRef.current) return;
+      if (!hasMoreRef.current) return;
+      const oldestMessage = currentMessages[0];
+      const before = oldestMessage?.timestamp || null;
+      if (!before) return;
 
-    loadOlderMessages(mode, currentMessages.length)
-      .then((meta) => {
-        hasMoreRef.current = Boolean(meta?.hasMore);
-        if (!meta?.loaded) return;
-        shouldRestoreScrollRef.current = { previousScrollHeight, previousScrollTop };
-      })
-      .finally(() => {
-        loadingOlderRef.current = false;
-        if (!shouldRestoreScrollRef.current) {
-          suppressAutoScrollRef.current = false;
-        }
-      });
-  }, [currentMessages.length, loadOlderMessages, mode]);
+      loadingOlderRef.current = true;
+      setLoadingOlder(true);
+      suppressAutoScrollRef.current = true;
+      const previousScrollHeight = el.scrollHeight;
+      const previousScrollTop = el.scrollTop;
+
+      loadOlderMessages(mode, before)
+        .then((meta) => {
+          hasMoreRef.current = Boolean(meta?.hasMore);
+          if (!meta?.loaded) return;
+          shouldRestoreScrollRef.current = { previousScrollHeight, previousScrollTop };
+        })
+        .finally(() => {
+          loadingOlderRef.current = false;
+          setLoadingOlder(false);
+          if (!shouldRestoreScrollRef.current) {
+            suppressAutoScrollRef.current = false;
+          }
+        });
+    }, 150);
+  }, [currentMessages, loadOlderMessages, mode, isFocusedView]);
 
   // Send seen acknowledgement when partner messages arrive
   useEffect(() => {
@@ -296,6 +593,9 @@ const Chat = () => {
       .filter(Boolean);
     if (unseenPartnerMsgIds.length > 0) {
       wsSend({ type: 'seen', message_ids: unseenPartnerMsgIds });
+      try {
+        navigator.serviceWorker.controller?.postMessage({ type: 'MSG_SEEN', message_ids: unseenPartnerMsgIds });
+      } catch (e) {}
       updateSeenIds(unseenPartnerMsgIds);
     }
   }, [currentMessages, connected, isCalm, updateSeenIds]);
@@ -303,7 +603,68 @@ const Chat = () => {
   useEffect(() => () => {
     if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
     if (goalConfirmationTimer.current) clearTimeout(goalConfirmationTimer.current);
+    if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    if (!showSearch) return;
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    searchDebounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const results = await searchMessages({ query: q, mode, chatId: coupleId, limit: 30 });
+        setSearchResults(results);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+  }, [searchQuery, showSearch, searchMessages, mode, coupleId]);
+
+  useEffect(() => {
+    if (!showSearch) return;
+
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+
+    const handleOutsidePointer = (event) => {
+      const target = event.target;
+      if (!target) return;
+
+      if (target.closest('[data-search-toggle]')) return;
+      if (searchContainerRef.current?.contains(target)) return;
+
+      setShowSearch(false);
+    };
+
+    document.addEventListener('mousedown', handleOutsidePointer);
+    document.addEventListener('touchstart', handleOutsidePointer, { passive: true });
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsidePointer);
+      document.removeEventListener('touchstart', handleOutsidePointer);
+    };
+  }, [showSearch]);
+
+  useEffect(() => {
+    if (isCalm) return;
+    setShowSearch(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setReplyingTo(null);
+    setFocusedMessages(null);
+    setFocusedTargetId(null);
+  }, [isCalm]);
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
@@ -316,6 +677,7 @@ const Chat = () => {
     const replyPayload = replyingTo
       ? {
           id: replyingTo.id,
+          messageId: replyingTo.id,
           text: replyingTo.text,
           sender_name: replyingTo.sender_name,
         }
@@ -365,6 +727,14 @@ const Chat = () => {
         setSending(false);
       }
     }
+
+    // Keep mobile keyboard open by refocusing the input after React updates
+    // and auto-scroll to latest message so the input and latest message remain visible.
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }));
+    });
+    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   const handleGoalSubmit = async () => {
@@ -422,10 +792,17 @@ const Chat = () => {
   };
 
   const showNotLinkedMessage = isCalm && !isLinked;
+  const visibleMessages = isFocusedView ? focusedMessages : currentMessages;
 
   return (
     <ModeWrapper>
-      <div className="h-[100dvh] bg-background flex flex-col relative">
+      <div
+        className="bg-background flex flex-col relative"
+        style={{
+          height: 'var(--real-vh, 100dvh)',
+          visibility: layoutReady ? 'visible' : 'hidden',
+        }}
+      >
 
         {/* Header */}
         <header className="sticky top-0 flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
@@ -438,8 +815,21 @@ const Chat = () => {
             </button>
             {isCalm && (
               <>
-                <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary shrink-0">
-                  {(partnerName || 'P').charAt(0)}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => { if (partnerProfilePic) setShowPartnerLightbox(true); }}
+                  onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && partnerProfilePic) setShowPartnerLightbox(true); }}
+                  className={`h-6 w-6 rounded-full overflow-hidden flex items-center justify-center shrink-0 ${partnerProfilePic ? 'cursor-pointer' : ''}`}
+                  aria-label={partnerProfilePic ? 'View partner photo' : 'Partner avatar'}
+                >
+                  {partnerProfilePic ? (
+                    <img src={partnerProfilePic} alt={partnerName || 'Partner'} className="h-full w-full object-cover object-center block" />
+                  ) : (
+                    <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-medium text-primary">
+                      {(partnerName || 'P').charAt(0)}
+                    </div>
+                  )}
                 </div>
                 <span className="text-xs font-body font-medium text-foreground truncate">
                   {partnerName || 'Partner'}
@@ -449,6 +839,23 @@ const Chat = () => {
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            {isCalm && (
+              <button
+                type="button"
+                data-search-toggle
+                onClick={() => {
+                  setShowSearch((v) => !v);
+                  if (showSearch) {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                  }
+                }}
+                className="text-foreground min-w-[36px] min-h-[36px] flex items-center justify-center cursor-pointer active:opacity-70"
+                aria-label="Search messages"
+              >
+                <Search size={18} />
+              </button>
+            )}
             {isVent && (
               <motion.button
                 initial={{ opacity: 0 }}
@@ -463,6 +870,51 @@ const Chat = () => {
             <ModeToggle mode={mode} onModeChange={handleModeSwitch} />
           </div>
         </header>
+
+        {isCalm && showSearch && (
+          <div ref={searchContainerRef} className="bg-card px-3 py-1">
+            <div className="relative">
+              <Input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search in this chat"
+                className="h-8 text-sm rounded-lg pr-8 border-0 focus:ring-0 focus:border-0 bg-card"
+              />
+              {searching && <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+            {searchQuery.trim() && (
+              <div className="mt-1 max-h-32 overflow-y-auto rounded-lg bg-background/60">
+                {searchResults.length === 0 ? (
+                  <p className="px-2 py-1 text-xs text-muted-foreground">No results</p>
+                ) : (
+                  searchResults.map((msg) => (
+                    <button
+                      key={`sr-${msg.id}`}
+                      type="button"
+                      className="block w-full border-b border-border/40 px-2 py-1 text-left last:border-b-0 hover:bg-muted/40"
+                      onClick={() => openFocusedThread(msg.id)}
+                    >
+                      <p className="line-clamp-1 text-sm text-foreground">{msg.text}</p>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {isCalm && isFocusedView && (
+          <div className="border-b border-border bg-card px-3 py-2">
+            <button
+              type="button"
+              onClick={backToLatestMessages}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Back to latest messages
+            </button>
+          </div>
+        )}
 
 
 
@@ -499,7 +951,12 @@ const Chat = () => {
             </div>
           ) : (
             <>
-              {currentMessages.length === 0 && (
+              {loadingOlder && hasMoreRef.current && (
+                <div className="flex justify-center py-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                </div>
+              )}
+              {visibleMessages.length === 0 && (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground font-body">
@@ -508,11 +965,11 @@ const Chat = () => {
                   </div>
                 </div>
               )}
-              {currentMessages.map((msg, i) => {
+              {visibleMessages.map((msg, i) => {
                 const itemKey = msg.local_key || msg.id || i;
                 const ts = msg.timestamp;
                 const dateKey = ts ? toISTDateKey(ts) : null;
-                const prevTs  = i > 0 ? currentMessages[i - 1].timestamp : null;
+                const prevTs  = i > 0 ? visibleMessages[i - 1].timestamp : null;
                 const prevKey = prevTs ? toISTDateKey(prevTs) : null;
                 const showSep = dateKey && dateKey !== prevKey;
 
@@ -530,7 +987,10 @@ const Chat = () => {
                     message={msg}
                     index={i}
                     seen={seenMessageIds.has(msg.id)}
+                    highlighted={String(highlightedMessageId || '') === String(msg.id || '')}
                     onReply={isCalm ? (m) => {
+                      if (isFocusedView) return;
+                      if (m?.is_deleted) return;
                       const previewText = String(m?.text || '').trim();
                       if (!previewText) return;
                       setReplyingTo({
@@ -539,11 +999,14 @@ const Chat = () => {
                         sender_name: m?.isMine ? 'You' : (partnerName || 'Partner'),
                       });
                     } : undefined}
+                    onReplyPreviewClick={isCalm ? (id) => (isFocusedView ? undefined : jumpToMessage(id)) : undefined}
+                    onLongPressDelete={isCalm ? (m) => (isFocusedView ? undefined : handleDeleteMessage(m)) : undefined}
+                    canDelete={Boolean(!isFocusedView && isCalm && msg?.isMine && !msg?.is_deleted && isWithinDeleteWindow(msg))}
                   />
                 );
 
                 return (
-                  <div key={`grp-${itemKey}`}>
+                  <div key={`grp-${itemKey}`} ref={(node) => registerMessageRef(String(msg.id || itemKey), node)}>
                     {showSep && (
                       <DateSeparator label={formatDateLabel(dateKey)} />
                     )}
@@ -740,7 +1203,7 @@ const Chat = () => {
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={startRecording}
-                  disabled={sending || !connected}
+                  disabled={sending}
                   className="rounded-full p-2 shrink-0 transition-colors bg-muted text-muted-foreground hover:bg-muted/80 disabled:opacity-40"
                   title="Tap to record"
                 >
@@ -787,6 +1250,7 @@ const Chat = () => {
               {!recording && (
                 <>
                   <Input
+                    ref={inputRef}
                     value={input}
                     onChange={handleInputChange}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
@@ -796,12 +1260,12 @@ const Chat = () => {
                         : `Message ${partnerName || 'your partner'}...`
                     }
                     className="rounded-[12px] text-sm flex-1 min-w-0"
-                    disabled={sending || (isCalm && !connected) || !!audioBlob}
+                    disabled={sending || !!audioBlob}
                   />
                   <motion.button
                     whileTap={{ scale: 0.97 }}
                     onClick={handleSend}
-                    disabled={sending || (isCalm && !connected) || !!audioBlob}
+                    disabled={sending || !!audioBlob}
                     className="rounded-pill bg-primary px-4 py-2 text-sm text-primary-foreground font-medium shadow-soft hover:bg-primary/90 transition-colors flex items-center justify-center shrink-0 disabled:opacity-50"
                   >
                     {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
@@ -809,10 +1273,33 @@ const Chat = () => {
                 </>
               )}
             </div>
+
+              {/* Partner photo lightbox */}
+              {showPartnerLightbox && partnerProfilePic && (
+                <Lightbox
+                  photo={{ image_url: partnerProfilePic, created_at: new Date().toISOString() }}
+                  onClose={() => setShowPartnerLightbox(false)}
+                />
+              )}
           </div>
         )}
 
         <ResolutionModal open={showResolution} onClose={() => setShowResolution(false)} />
+
+        <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+          <AlertDialogContent className="w-[calc(100%-2.25rem)] max-w-[320px] rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this message?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this message?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDeleteMessage}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Mode switch confirmation modal */}
         <AnimatePresence>
