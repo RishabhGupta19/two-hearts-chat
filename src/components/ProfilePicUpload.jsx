@@ -23,8 +23,8 @@ export default function ProfilePicUpload({ currentImage, userName }) {
       toast.error('Please select a JPG, PNG or WebP image');
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image must be smaller than 2MB');
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('Image must be smaller than 15MB');
       return;
     }
 

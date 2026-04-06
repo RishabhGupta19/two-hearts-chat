@@ -281,8 +281,8 @@ export const AppProvider = ({ children }) => {
     try {
       const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
       if (!allowed.includes(file.type)) throw new Error('Invalid file type');
-      const maxSize = 2 * 1024 * 1024; // 2MB
-      if (file.size > maxSize) throw new Error('File too large (max 2MB)');
+      const maxSize = 15 * 1024 * 1024; // 15MB
+      if (file.size > maxSize) throw new Error('File too large (max 15MB)');
 
       const form = new FormData();
       form.append('image', file);
