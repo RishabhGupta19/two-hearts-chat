@@ -29,6 +29,9 @@ const defaultState = {
   mode: localStorage.getItem('chat_mode') || 'calm',
   messages: [],
   goals: [],
+  currentSong: null,
+  currentQueue: [],
+  currentIndex: 0,
   loading: true,
 };
 
@@ -688,6 +691,53 @@ export const AppProvider = ({ children }) => {
     }));
   }, []);
 
+  // Global music player state (persists across routes while app is open)
+  const startMusicPlayback = useCallback((song, queue = []) => {
+    if (!song) return;
+    const normalizedQueue = Array.isArray(queue) ? queue : [];
+    const index = normalizedQueue.findIndex((item) => item?.videoId === song?.videoId);
+
+    setState((s) => ({
+      ...s,
+      currentSong: song,
+      currentQueue: normalizedQueue,
+      currentIndex: index >= 0 ? index : 0,
+    }));
+  }, []);
+
+  const playNextTrack = useCallback(() => {
+    setState((s) => {
+      if (s.currentIndex >= s.currentQueue.length - 1) return s;
+      const nextIndex = s.currentIndex + 1;
+      return {
+        ...s,
+        currentIndex: nextIndex,
+        currentSong: s.currentQueue[nextIndex] || s.currentSong,
+      };
+    });
+  }, []);
+
+  const playPrevTrack = useCallback(() => {
+    setState((s) => {
+      if (s.currentIndex <= 0) return s;
+      const prevIndex = s.currentIndex - 1;
+      return {
+        ...s,
+        currentIndex: prevIndex,
+        currentSong: s.currentQueue[prevIndex] || s.currentSong,
+      };
+    });
+  }, []);
+
+  const closeMusicPlayer = useCallback(() => {
+    setState((s) => ({
+      ...s,
+      currentSong: null,
+      currentQueue: [],
+      currentIndex: 0,
+    }));
+  }, []);
+
   return (
     <AppContext.Provider
       value={{
@@ -716,6 +766,10 @@ export const AppProvider = ({ children }) => {
         addWsMessage,
         removeMessageByTempId,
         loadOlderMessages,
+        startMusicPlayback,
+        playNextTrack,
+        playPrevTrack,
+        closeMusicPlayer,
         deleteMessage,
         searchMessages,
         fetchMessageContext,

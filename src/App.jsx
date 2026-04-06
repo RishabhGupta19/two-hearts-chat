@@ -1,10 +1,12 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { HashRouter, Route, Routes, Navigate } from "react-router-dom";
+import { HashRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
 import { Toaster as Sonner, toast } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider, useApp } from "@/context/AppContext";
+import MusicPlayer from "@/components/MusicPlayer";
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
 import Assessment from "./pages/Assessment";
@@ -14,6 +16,7 @@ import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
 import Goals from "./pages/Goals";
 import Gallery from "./pages/Gallery";
+import Music from "./pages/Music";
 import NotFound from "./pages/NotFound";
 import IOSInstallBanner from "@/components/IOSInstallBanner";
 
@@ -82,8 +85,30 @@ if (!onboardingComplete) {
       <Route path="/chat" element={<Chat />} />
       <Route path="/goals" element={<Goals />} />
       <Route path="/gallery" element={<Gallery />} />
+      <Route path="/music" element={<Music />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
+  );
+};
+
+const GlobalMusicPlayer = () => {
+  const { currentSong, currentQueue, currentIndex, playNextTrack, playPrevTrack, closeMusicPlayer } = useApp();
+  const location = useLocation();
+  const showPlayerUi = location.pathname === "/music";
+
+  return (
+    <AnimatePresence>
+      {currentSong && (
+        <MusicPlayer
+          visible={showPlayerUi}
+          song={currentSong}
+          queue={currentQueue}
+          onClose={closeMusicPlayer}
+          onPlayNext={currentIndex < currentQueue.length - 1 ? playNextTrack : null}
+          onPlayPrev={currentIndex > 0 ? playPrevTrack : null}
+        />
+      )}
+    </AnimatePresence>
   );
 };
 
@@ -148,6 +173,7 @@ const App = () => {
         <AppProvider>
           <HashRouter>
             <AppRoutes />
+            <GlobalMusicPlayer />
             <IOSInstallBanner />
           </HashRouter>
         </AppProvider>

@@ -443,6 +443,20 @@ const Dashboard = () => {
             <h3 className="font-heading text-lg font-semibold text-foreground mb-1">Gallery</h3>
             <p className="text-xs text-muted-foreground font-body">Share your memories</p>
           </motion.button>
+
+          <motion.button
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => navigate('/music')}
+            className="rounded-lg border bg-card p-8 shadow-soft text-center hover:shadow-warm transition-shadow">
+            
+            <span className="text-4xl block mb-3">🎵</span>
+            <h3 className="font-heading text-lg font-semibold text-foreground mb-1">Our Music</h3>
+            <p className="text-xs text-muted-foreground font-body">Your shared playlist</p>
+          </motion.button>
         </div>
 
         {/* Footer */}
