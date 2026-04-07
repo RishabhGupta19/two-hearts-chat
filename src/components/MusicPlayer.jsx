@@ -432,17 +432,59 @@ const MusicPlayer = ({
     }
   }, []);
 
+  const syncPlaybackState = useCallback(() => {
+    const player = playerRef.current;
+    if (!player) {
+      setIsPlaying(false);
+      stopPolling();
+      releaseWakeLock();
+      return false;
+    }
+
+    let state = null;
+    let ct = 0;
+    let dur = 0;
+
+    try {
+      state = player.getPlayerState?.();
+      ct = player.getCurrentTime?.() ?? 0;
+      dur = player.getDuration?.() ?? 0;
+    } catch {
+      state = null;
+    }
+
+    const YTState = window.YT?.PlayerState;
+    const isActuallyPlaying = state === YTState?.PLAYING;
+
+    setCurrentTime(ct);
+    setDuration(dur);
+    setProgress(dur > 0 ? (ct / dur) * 100 : 0);
+
+    if (isActuallyPlaying) {
+      setIsPlaying(true);
+      startPolling();
+      requestWakeLock();
+    } else {
+      setIsPlaying(false);
+      stopPolling();
+      releaseWakeLock();
+    }
+
+    return isActuallyPlaying;
+  }, [releaseWakeLock, requestWakeLock, startPolling, stopPolling]);
+
   const resumePlayback = useCallback(() => {
     if (!playerRef.current) return;
     onUnlockAudio?.();
     try {
       playerRef.current.playVideo();
-      startPolling();
-      setIsPlaying(true);
+      window.setTimeout(() => {
+        syncPlaybackState();
+      }, 0);
     } catch {
       // ignore resume failures
     }
-  }, [onUnlockAudio, startPolling]);
+  }, [onUnlockAudio, syncPlaybackState]);
 
   // ── Media Session API (notification + lock screen controls) ──
   useEffect(() => {
@@ -461,13 +503,11 @@ const MusicPlayer = ({
     navigator.mediaSession.setActionHandler('play', () => {
       onUnlockAudio?.();
       resumePlayback();
-      navigator.mediaSession.playbackState = 'playing';
     });
 
     navigator.mediaSession.setActionHandler('pause', () => {
       playerRef.current?.pauseVideo();
-      setIsPlaying(false);
-      navigator.mediaSession.playbackState = 'paused';
+      syncPlaybackState();
     });
 
     navigator.mediaSession.setActionHandler('nexttrack', () => onPlayNext?.());
@@ -480,7 +520,7 @@ const MusicPlayer = ({
       }
     });
 
-  }, [onUnlockAudio, resumePlayback, song]); // re-run when song changes
+  }, [onUnlockAudio, resumePlayback, song, syncPlaybackState]); // re-run when song changes
 
   // ── Keep Media Session playback state in sync ───────────
   useEffect(() => {
@@ -503,12 +543,10 @@ const MusicPlayer = ({
   // ── Resume on visibility change (iOS/Android foreground) ─
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && isPlaying) {
-        requestWakeLock();
-        setTimeout(() => {
-          resumePlayback();
-        }, 300); // iOS needs a brief delay
-      } else if (document.visibilityState === 'hidden') {
+      if (document.visibilityState === 'visible') {
+        syncPlaybackState();
+      } else {
+        syncPlaybackState();
         releaseWakeLock();
       }
     };
@@ -518,7 +556,7 @@ const MusicPlayer = ({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       releaseWakeLock();
     };
-  }, [isPlaying, releaseWakeLock, requestWakeLock, resumePlayback]);
+  }, [releaseWakeLock, syncPlaybackState]);
 
   // ── Init YouTube player ─────────────────────────────────
   useEffect(() => {
@@ -557,26 +595,19 @@ const MusicPlayer = ({
             if (autoPlay) {
               onUnlockAudio?.();
               e.target.playVideo();
-              setIsPlaying(true);
-              navigator.mediaSession && (navigator.mediaSession.playbackState = 'playing');
-              requestWakeLock();
             }
-            startPolling();
+            window.setTimeout(() => {
+              syncPlaybackState();
+            }, 0);
           },
           onStateChange: (e) => {
             const S = YT.PlayerState;
             if (e.data === S.PLAYING) {
-              setIsPlaying(true);
-              startPolling();
-              requestWakeLock();
+              syncPlaybackState();
             } else if (e.data === S.PAUSED) {
-              setIsPlaying(false);
-              stopPolling();
-              releaseWakeLock();
+              syncPlaybackState();
             } else if (e.data === S.ENDED) {
-              setIsPlaying(false);
-              stopPolling();
-              releaseWakeLock();
+              syncPlaybackState();
               onPlayNext?.();
             }
           },
@@ -593,7 +624,7 @@ const MusicPlayer = ({
       destroyed = true;
       stopPolling();
     };
-  }, [autoPlay, initialSeekTime, onUnlockAudio, releaseWakeLock, requestWakeLock, song?.videoId]);
+  }, [autoPlay, initialSeekTime, onUnlockAudio, song?.videoId, syncPlaybackState]);
 
   useEffect(() => {
     onPlaybackStateChange?.({ isPlaying, currentTime });
@@ -612,9 +643,7 @@ const MusicPlayer = ({
     onUnlockAudio?.();
     if (isPlaying) {
       playerRef.current.pauseVideo();
-      releaseWakeLock();
     } else {
-      requestWakeLock();
       resumePlayback();
     }
   };
