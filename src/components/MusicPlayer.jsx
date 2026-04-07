@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Play, Pause, X, ChevronDown, ChevronUp, SkipBack, SkipForward } from 'lucide-react';
 
 let ytApiPromise = null;
-const loadYTApi = () => {
+export const loadYTApi = () => {
   if (ytApiPromise) return ytApiPromise;
   ytApiPromise = new Promise((resolve) => {
     if (window.YT && window.YT.Player) { resolve(window.YT); return; }
@@ -428,3 +428,4 @@ const MusicPlayer = ({
 };
 
 export default MusicPlayer;
+
