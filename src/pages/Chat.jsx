@@ -816,7 +816,7 @@ const Chat = () => {
   return (
     <ModeWrapper>
       <div
-        className="bg-background flex flex-col relative"
+        className="bg-background flex flex-col relative overflow-x-hidden"
         style={{
           height: 'var(--real-vh, 100dvh)',
           minHeight: '100dvh',
@@ -825,8 +825,8 @@ const Chat = () => {
       >
 
         {/* Header */}
-        <header className="sticky top-0 flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
-          <div className="flex items-center gap-2 min-w-0 shrink-0">
+        <header className="sticky top-0 flex flex-wrap items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             <button
               onClick={() => navigate('/dashboard')}
               className="text-foreground min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer active:opacity-70 -ml-1"
@@ -858,7 +858,7 @@ const Chat = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end max-w-full">
             {isCalm && (
               <button
                 type="button"
@@ -882,7 +882,7 @@ const Chat = () => {
                 animate={{ opacity: 1 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setShowResolution(true)}
-                className="text-[10px] rounded-pill px-2 py-1 bg-muted text-muted-foreground hover:bg-muted/80 font-body whitespace-nowrap"
+                className="text-[9px] sm:text-[10px] rounded-pill px-2 py-1 bg-muted text-muted-foreground hover:bg-muted/80 font-body whitespace-nowrap"
               >
                 Feeling better?
               </motion.button>

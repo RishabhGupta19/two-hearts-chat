@@ -98,6 +98,7 @@ const GlobalMusicPlayer = ({ onUnlockAudio }) => {
     currentQueue,
     currentIndex,
     musicWasPlaying,
+    musicShouldResume,
     musicPosition,
     playNextTrack,
     playPrevTrack,
@@ -114,7 +115,7 @@ const GlobalMusicPlayer = ({ onUnlockAudio }) => {
           visible={showPlayerUi}
           song={currentSong}
           queue={currentQueue}
-          autoPlay={musicWasPlaying}
+          autoPlay={musicShouldResume || musicWasPlaying}
           initialSeekTime={musicPosition}
           onUnlockAudio={onUnlockAudio}
           onPlaybackStateChange={updateMusicPlayback}

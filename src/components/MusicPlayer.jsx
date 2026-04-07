@@ -347,7 +347,7 @@ import { motion } from 'framer-motion';
 import { Play, Pause, X, ChevronDown, ChevronUp, SkipBack, SkipForward } from 'lucide-react';
 
 let ytApiPromise = null;
-const loadYTApi = () => {
+export const loadYTApi = () => {
   if (ytApiPromise) return ytApiPromise;
   ytApiPromise = new Promise((resolve) => {
     if (window.YT && window.YT.Player) { resolve(window.YT); return; }
@@ -375,6 +375,8 @@ const MusicPlayer = ({
   const playerRef = useRef(null);
   const progressIntervalRef = useRef(null);
   const wakeLockRef = useRef(null);
+  const lastPauseReasonRef = useRef(null);
+  const resumeOnVisibleRef = useRef(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -436,6 +438,7 @@ const MusicPlayer = ({
     const player = playerRef.current;
     if (!player) {
       setIsPlaying(false);
+      onPlaybackStateChange?.({ isPlaying: false, currentTime: currentTime, shouldResume: false });
       stopPolling();
       releaseWakeLock();
       return false;
@@ -461,30 +464,48 @@ const MusicPlayer = ({
     setProgress(dur > 0 ? (ct / dur) * 100 : 0);
 
     if (isActuallyPlaying) {
+      lastPauseReasonRef.current = null;
+      resumeOnVisibleRef.current = false;
       setIsPlaying(true);
       startPolling();
       requestWakeLock();
+      onPlaybackStateChange?.({ isPlaying: true, currentTime: ct, shouldResume: true });
     } else {
+      const shouldResume = lastPauseReasonRef.current !== 'user';
       setIsPlaying(false);
       stopPolling();
       releaseWakeLock();
+      onPlaybackStateChange?.({ isPlaying: false, currentTime: ct, shouldResume });
     }
 
     return isActuallyPlaying;
-  }, [releaseWakeLock, requestWakeLock, startPolling, stopPolling]);
+  }, [currentTime, onPlaybackStateChange, releaseWakeLock, requestWakeLock, startPolling, stopPolling]);
 
   const resumePlayback = useCallback(() => {
-    if (!playerRef.current) return;
+    const player = playerRef.current;
+    if (!player) return;
     onUnlockAudio?.();
     try {
-      playerRef.current.playVideo();
+      const seekTime = Number.isFinite(currentTime) && currentTime > 0 ? currentTime : 0;
+      const state = player.getPlayerState?.();
+      if (state === window.YT?.PlayerState?.ENDED || state === window.YT?.PlayerState?.UNSTARTED) {
+        try {
+          player.loadVideoById({
+            videoId: song?.videoId,
+            startSeconds: seekTime,
+          });
+        } catch {}
+      } else if (seekTime > 0) {
+        try { player.seekTo(seekTime, true); } catch {}
+      }
+      player.playVideo();
       window.setTimeout(() => {
         syncPlaybackState();
       }, 0);
     } catch {
       // ignore resume failures
     }
-  }, [onUnlockAudio, syncPlaybackState]);
+  }, [currentTime, onUnlockAudio, song?.videoId, syncPlaybackState]);
 
   // ── Media Session API (notification + lock screen controls) ──
   useEffect(() => {
@@ -506,6 +527,7 @@ const MusicPlayer = ({
     });
 
     navigator.mediaSession.setActionHandler('pause', () => {
+      lastPauseReasonRef.current = 'user';
       playerRef.current?.pauseVideo();
       syncPlaybackState();
     });
@@ -545,18 +567,29 @@ const MusicPlayer = ({
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         syncPlaybackState();
+        if (resumeOnVisibleRef.current) {
+          resumePlayback();
+        }
       } else {
+        if (isPlaying) {
+          lastPauseReasonRef.current = 'system';
+          resumeOnVisibleRef.current = true;
+        }
         syncPlaybackState();
         releaseWakeLock();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handleVisibilityChange);
+    window.addEventListener('pageshow', handleVisibilityChange);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handleVisibilityChange);
+      window.removeEventListener('pageshow', handleVisibilityChange);
       releaseWakeLock();
     };
-  }, [releaseWakeLock, syncPlaybackState]);
+  }, [isPlaying, releaseWakeLock, resumePlayback, syncPlaybackState]);
 
   // ── Init YouTube player ─────────────────────────────────
   useEffect(() => {
@@ -605,8 +638,12 @@ const MusicPlayer = ({
             if (e.data === S.PLAYING) {
               syncPlaybackState();
             } else if (e.data === S.PAUSED) {
+              if (lastPauseReasonRef.current !== 'user') {
+                resumeOnVisibleRef.current = true;
+              }
               syncPlaybackState();
             } else if (e.data === S.ENDED) {
+              resumeOnVisibleRef.current = false;
               syncPlaybackState();
               onPlayNext?.();
             }
@@ -642,8 +679,11 @@ const MusicPlayer = ({
     if (!playerRef.current) return;
     onUnlockAudio?.();
     if (isPlaying) {
+      lastPauseReasonRef.current = 'user';
+      resumeOnVisibleRef.current = false;
       playerRef.current.pauseVideo();
     } else {
+      lastPauseReasonRef.current = null;
       resumePlayback();
     }
   };
