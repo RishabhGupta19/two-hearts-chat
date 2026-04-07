@@ -92,7 +92,7 @@ if (!onboardingComplete) {
   );
 };
 
-const GlobalMusicPlayer = () => {
+const GlobalMusicPlayer = ({ onUnlockAudio }) => {
   const {
     currentSong,
     currentQueue,
@@ -116,6 +116,7 @@ const GlobalMusicPlayer = () => {
           queue={currentQueue}
           autoPlay={musicWasPlaying}
           initialSeekTime={musicPosition}
+          onUnlockAudio={onUnlockAudio}
           onPlaybackStateChange={updateMusicPlayback}
           onClose={closeMusicPlayer}
           onPlayNext={currentIndex < currentQueue.length - 1 ? playNextTrack : null}
@@ -144,7 +145,7 @@ const GlobalMusicPlayer = () => {
 // );
 
 const App = () => {
-  useBackgroundAudio();
+  const { unlock } = useBackgroundAudio();
 
   useEffect(() => {
     const enforceFirebaseMessagingWorker = async () => {
@@ -189,7 +190,7 @@ const App = () => {
         <AppProvider>
           <HashRouter>
             <AppRoutes />
-            <GlobalMusicPlayer />
+            <GlobalMusicPlayer onUnlockAudio={unlock} />
             <IOSInstallBanner />
           </HashRouter>
         </AppProvider>

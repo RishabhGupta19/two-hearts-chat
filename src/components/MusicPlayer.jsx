@@ -368,11 +368,13 @@ const MusicPlayer = ({
   visible = true,
   autoPlay = true,
   initialSeekTime = 0,
+  onUnlockAudio,
   onPlaybackStateChange,
 }) => {
   const playerContainerRef = useRef(null);
   const playerRef = useRef(null);
   const progressIntervalRef = useRef(null);
+  const wakeLockRef = useRef(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -406,6 +408,42 @@ const MusicPlayer = ({
     clearInterval(progressIntervalRef.current);
   }, []);
 
+  const requestWakeLock = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+
+    try {
+      wakeLockRef.current = await navigator.wakeLock.request('screen');
+      wakeLockRef.current?.addEventListener?.('release', () => {
+        if (wakeLockRef.current) wakeLockRef.current = null;
+      });
+    } catch {
+      // ignore wake lock failures; unsupported browsers will simply skip this
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(async () => {
+    try {
+      await wakeLockRef.current?.release?.();
+    } catch {
+      // ignore release failures
+    } finally {
+      wakeLockRef.current = null;
+    }
+  }, []);
+
+  const resumePlayback = useCallback(() => {
+    if (!playerRef.current) return;
+    onUnlockAudio?.();
+    try {
+      playerRef.current.playVideo();
+      startPolling();
+      setIsPlaying(true);
+    } catch {
+      // ignore resume failures
+    }
+  }, [onUnlockAudio, startPolling]);
+
   // ── Media Session API (notification + lock screen controls) ──
   useEffect(() => {
     if (!('mediaSession' in navigator) || !song) return;
@@ -421,8 +459,8 @@ const MusicPlayer = ({
     });
 
     navigator.mediaSession.setActionHandler('play', () => {
-      playerRef.current?.playVideo();
-      setIsPlaying(true);
+      onUnlockAudio?.();
+      resumePlayback();
       navigator.mediaSession.playbackState = 'playing';
     });
 
@@ -442,7 +480,7 @@ const MusicPlayer = ({
       }
     });
 
-  }, [song]); // re-run when song changes
+  }, [onUnlockAudio, resumePlayback, song]); // re-run when song changes
 
   // ── Keep Media Session playback state in sync ───────────
   useEffect(() => {
@@ -466,15 +504,21 @@ const MusicPlayer = ({
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isPlaying) {
+        requestWakeLock();
         setTimeout(() => {
-          try { playerRef.current?.playVideo(); } catch {}
+          resumePlayback();
         }, 300); // iOS needs a brief delay
+      } else if (document.visibilityState === 'hidden') {
+        releaseWakeLock();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isPlaying]);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      releaseWakeLock();
+    };
+  }, [isPlaying, releaseWakeLock, requestWakeLock, resumePlayback]);
 
   // ── Init YouTube player ─────────────────────────────────
   useEffect(() => {
@@ -511,9 +555,11 @@ const MusicPlayer = ({
               try { e.target.seekTo(initialSeekTime, true); setCurrentTime(initialSeekTime); } catch {}
             }
             if (autoPlay) {
+              onUnlockAudio?.();
               e.target.playVideo();
               setIsPlaying(true);
               navigator.mediaSession && (navigator.mediaSession.playbackState = 'playing');
+              requestWakeLock();
             }
             startPolling();
           },
@@ -522,12 +568,15 @@ const MusicPlayer = ({
             if (e.data === S.PLAYING) {
               setIsPlaying(true);
               startPolling();
+              requestWakeLock();
             } else if (e.data === S.PAUSED) {
               setIsPlaying(false);
               stopPolling();
+              releaseWakeLock();
             } else if (e.data === S.ENDED) {
               setIsPlaying(false);
               stopPolling();
+              releaseWakeLock();
               onPlayNext?.();
             }
           },
@@ -544,7 +593,7 @@ const MusicPlayer = ({
       destroyed = true;
       stopPolling();
     };
-  }, [song?.videoId, autoPlay, initialSeekTime]);
+  }, [autoPlay, initialSeekTime, onUnlockAudio, releaseWakeLock, requestWakeLock, song?.videoId]);
 
   useEffect(() => {
     onPlaybackStateChange?.({ isPlaying, currentTime });
@@ -553,13 +602,21 @@ const MusicPlayer = ({
   useEffect(() => {
     return () => {
       stopPolling();
+      releaseWakeLock();
       try { playerRef.current?.destroy(); } catch {}
     };
-  }, [stopPolling]);
+  }, [releaseWakeLock, stopPolling]);
 
   const togglePlay = () => {
     if (!playerRef.current) return;
-    isPlaying ? playerRef.current.pauseVideo() : playerRef.current.playVideo();
+    onUnlockAudio?.();
+    if (isPlaying) {
+      playerRef.current.pauseVideo();
+      releaseWakeLock();
+    } else {
+      requestWakeLock();
+      resumePlayback();
+    }
   };
 
   const seek = useCallback((e) => {
