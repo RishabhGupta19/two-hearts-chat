@@ -1,18 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Play, Pause, X, ChevronDown, ChevronUp, SkipBack, SkipForward } from 'lucide-react';
 
-// ────────────────────────────────────────────────────────────
-// Load the YouTube IFrame API (only once globally)
-// ────────────────────────────────────────────────────────────
 let ytApiPromise = null;
-export const loadYTApi = () => {
+const loadYTApi = () => {
   if (ytApiPromise) return ytApiPromise;
   ytApiPromise = new Promise((resolve) => {
-    if (window.YT && window.YT.Player) {
-      resolve(window.YT);
-      return;
-    }
+    if (window.YT && window.YT.Player) { resolve(window.YT); return; }
     const tag = document.createElement('script');
     tag.src = 'https://www.youtube.com/iframe_api';
     document.head.appendChild(tag);
@@ -21,9 +15,6 @@ export const loadYTApi = () => {
   return ytApiPromise;
 };
 
-// ────────────────────────────────────────────────────────────
-// MusicPlayer Component
-// ────────────────────────────────────────────────────────────
 const MusicPlayer = ({
   song,
   queue = [],
@@ -33,132 +24,208 @@ const MusicPlayer = ({
   visible = true,
   autoPlay = true,
   initialSeekTime = 0,
+  onUnlockAudio,
   onPlaybackStateChange,
 }) => {
   const playerContainerRef = useRef(null);
   const playerRef = useRef(null);
-  const playerReadyRef = useRef(false);
-  const pendingTrackRef = useRef(null);
   const progressIntervalRef = useRef(null);
-  const isPlayingRef = useRef(false);
-  const currentTimeRef = useRef(0);
+  const wakeLockRef = useRef(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);        // 0–100
+  const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const progressBarRef = useRef(null);
 
-  useEffect(() => {
-    isPlayingRef.current = isPlaying;
-  }, [isPlaying]);
-
-  useEffect(() => {
-    currentTimeRef.current = currentTime;
-  }, [currentTime]);
-
-  // ── Format seconds → mm:ss ──────────────────────────────
   const fmt = (s) => {
     const m = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
-  // ── Progress polling ─────────────────────────────────────
+  // ── Progress polling ────────────────────────────────────
   const startPolling = useCallback(() => {
     clearInterval(progressIntervalRef.current);
     progressIntervalRef.current = setInterval(() => {
-      if (!playerRef.current || isDragging) return;
+      if (!playerRef.current) return;
       try {
         const ct = playerRef.current.getCurrentTime?.() ?? 0;
         const dur = playerRef.current.getDuration?.() ?? 0;
         setCurrentTime(ct);
         setDuration(dur);
         if (dur > 0) setProgress((ct / dur) * 100);
-      } catch {/* ignore */}
+      } catch {}
     }, 500);
-  }, [isDragging]);
+  }, []);
 
   const stopPolling = useCallback(() => {
     clearInterval(progressIntervalRef.current);
   }, []);
 
-  const startTrack = useCallback((player, nextSong, startSeconds = 0, forcePlay = true) => {
-    if (!player || !nextSong?.videoId) return;
-
-    const payload = {
-      videoId: nextSong.videoId,
-      startSeconds,
-    };
+  const requestWakeLock = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
 
     try {
-      if (forcePlay) {
-        player.loadVideoById(payload);
-        setIsPlaying(true);
-      } else {
-        player.cueVideoById(payload);
-        setIsPlaying(false);
-      }
-      setCurrentTime(startSeconds);
-      if (startSeconds > 0) {
-        setProgress(0);
-      }
-      startPolling();
+      wakeLockRef.current = await navigator.wakeLock.request('screen');
+      wakeLockRef.current?.addEventListener?.('release', () => {
+        if (wakeLockRef.current) wakeLockRef.current = null;
+      });
     } catch {
-      // ignore player command errors during fast track switching
+      // ignore wake lock failures; unsupported browsers will simply skip this
     }
-  }, [startPolling]);
+  }, []);
 
-  const syncPlaybackSnapshot = useCallback(() => {
+  const releaseWakeLock = useCallback(async () => {
+    try {
+      await wakeLockRef.current?.release?.();
+    } catch {
+      // ignore release failures
+    } finally {
+      wakeLockRef.current = null;
+    }
+  }, []);
+
+  const syncPlaybackState = useCallback(() => {
     const player = playerRef.current;
-    const current = (() => {
-      try {
-        return player?.getCurrentTime?.() ?? currentTimeRef.current ?? 0;
-      } catch {
-        return currentTimeRef.current ?? 0;
-      }
-    })();
+    if (!player) {
+      setIsPlaying(false);
+      stopPolling();
+      releaseWakeLock();
+      return false;
+    }
 
-    onPlaybackStateChange?.({
-      isPlaying: isPlayingRef.current,
-      currentTime: current,
-    });
-  }, [onPlaybackStateChange]);
+    let state = null;
+    let ct = 0;
+    let dur = 0;
+
+    try {
+      state = player.getPlayerState?.();
+      ct = player.getCurrentTime?.() ?? 0;
+      dur = player.getDuration?.() ?? 0;
+    } catch {
+      state = null;
+    }
+
+    const YTState = window.YT?.PlayerState;
+    const isActuallyPlaying = state === YTState?.PLAYING;
+
+    setCurrentTime(ct);
+    setDuration(dur);
+    setProgress(dur > 0 ? (ct / dur) * 100 : 0);
+
+    if (isActuallyPlaying) {
+      setIsPlaying(true);
+      startPolling();
+      requestWakeLock();
+    } else {
+      setIsPlaying(false);
+      stopPolling();
+      releaseWakeLock();
+    }
+
+    return isActuallyPlaying;
+  }, [releaseWakeLock, requestWakeLock, startPolling, stopPolling]);
 
   const resumePlayback = useCallback(() => {
-    const player = playerRef.current;
-    if (!player || autoPlay === false) return;
-
-    const seekTime = Number.isFinite(currentTimeRef.current) ? currentTimeRef.current : 0;
-
+    if (!playerRef.current) return;
+    onUnlockAudio?.();
     try {
-      if (seekTime > 0) {
-        player.seekTo(seekTime, true);
-      }
-      player.playVideo();
-      startPolling();
-      setIsPlaying(true);
+      playerRef.current.playVideo();
+      window.setTimeout(() => {
+        syncPlaybackState();
+      }, 0);
     } catch {
-      // ignore resume failures; the browser may still be waking the media stack
+      // ignore resume failures
     }
-  }, [autoPlay, startPolling]);
+  }, [onUnlockAudio, syncPlaybackState]);
 
-  // ── Initialise player once, then reuse it for each track change ─────────
+  // ── Media Session API (notification + lock screen controls) ──
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !song) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: song.title,
+      artist: song.channelTitle,
+      artwork: [
+        { src: song.thumbnail, sizes: '96x96',   type: 'image/jpeg' },
+        { src: song.thumbnail, sizes: '256x256',  type: 'image/jpeg' },
+        { src: song.thumbnail, sizes: '512x512',  type: 'image/jpeg' },
+      ],
+    });
+
+    navigator.mediaSession.setActionHandler('play', () => {
+      onUnlockAudio?.();
+      resumePlayback();
+    });
+
+    navigator.mediaSession.setActionHandler('pause', () => {
+      playerRef.current?.pauseVideo();
+      syncPlaybackState();
+    });
+
+    navigator.mediaSession.setActionHandler('nexttrack', () => onPlayNext?.());
+    navigator.mediaSession.setActionHandler('previoustrack', () => onPlayPrev?.());
+
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if (details.seekTime && playerRef.current) {
+        playerRef.current.seekTo(details.seekTime, true);
+        setCurrentTime(details.seekTime);
+      }
+    });
+
+  }, [onUnlockAudio, resumePlayback, song, syncPlaybackState]); // re-run when song changes
+
+  // ── Keep Media Session playback state in sync ───────────
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+  }, [isPlaying]);
+
+  // ── Keep Media Session position in sync ─────────────────
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || duration <= 0) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration,
+        playbackRate: 1,
+        position: Math.min(currentTime, duration),
+      });
+    } catch {}
+  }, [currentTime, duration]);
+
+  // ── Resume on visibility change (iOS/Android foreground) ─
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncPlaybackState();
+      } else {
+        syncPlaybackState();
+        releaseWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      releaseWakeLock();
+    };
+  }, [releaseWakeLock, syncPlaybackState]);
+
+  // ── Init YouTube player ─────────────────────────────────
   useEffect(() => {
     if (!song) return;
-
     let destroyed = false;
 
     loadYTApi().then((YT) => {
       if (destroyed) return;
-
       if (playerRef.current) {
-        return;
+        try { playerRef.current.destroy(); } catch {}
+        playerRef.current = null;
       }
 
-      playerReadyRef.current = false;
       playerRef.current = new YT.Player(playerContainerRef.current, {
         host: 'https://www.youtube.com',
         width: '200',
@@ -178,36 +245,30 @@ const MusicPlayer = ({
         },
         events: {
           onReady: (e) => {
-            playerReadyRef.current = true;
-            const nextSong = pendingTrackRef.current || song;
-            pendingTrackRef.current = null;
-            startTrack(
-              e.target,
-              nextSong,
-              Number.isFinite(initialSeekTime) && initialSeekTime > 0 ? initialSeekTime : 0,
-              autoPlay !== false
-            );
+            if ((initialSeekTime || 0) > 0) {
+              try { e.target.seekTo(initialSeekTime, true); setCurrentTime(initialSeekTime); } catch {}
+            }
+            if (autoPlay) {
+              onUnlockAudio?.();
+              e.target.playVideo();
+            }
+            window.setTimeout(() => {
+              syncPlaybackState();
+            }, 0);
           },
           onStateChange: (e) => {
-            const state = e.data;
-            if (state === YT.PlayerState.PLAYING) {
-              setIsPlaying(true);
-              startPolling();
-            } else if (state === YT.PlayerState.PAUSED) {
-              stopPolling();
-              if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
-                return;
-              }
-              setIsPlaying(false);
-            } else if (state === YT.PlayerState.ENDED) {
-              setIsPlaying(false);
-              stopPolling();
+            const S = YT.PlayerState;
+            if (e.data === S.PLAYING) {
+              syncPlaybackState();
+            } else if (e.data === S.PAUSED) {
+              syncPlaybackState();
+            } else if (e.data === S.ENDED) {
+              syncPlaybackState();
               onPlayNext?.();
             }
           },
           onError: (e) => {
-            // Some videos are restricted from embedded playback.
-            console.warn('YouTube player error:', e?.data, song?.videoId);
+            console.warn('YT error:', e?.data, song?.videoId);
             setIsPlaying(false);
             stopPolling();
           },
@@ -219,76 +280,30 @@ const MusicPlayer = ({
       destroyed = true;
       stopPolling();
     };
-  }, [song]);
-
-  useEffect(() => {
-    if (!song?.videoId) return;
-    if (!playerRef.current || !playerReadyRef.current) {
-      pendingTrackRef.current = song;
-      return;
-    }
-
-    startTrack(playerRef.current, song, 0, true);
-  }, [song?.videoId, song, startTrack]);
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (typeof document === 'undefined') return;
-      if (document.visibilityState === 'hidden') {
-        syncPlaybackSnapshot();
-        stopPolling();
-        return;
-      }
-
-      if (document.visibilityState === 'visible' && autoPlay) {
-        resumePlayback();
-      }
-    };
-
-    const handlePageHide = () => {
-      syncPlaybackSnapshot();
-      stopPolling();
-    };
-
-    const handlePageShow = (event) => {
-      if (event?.persisted || autoPlay) {
-        resumePlayback();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', handlePageHide);
-    window.addEventListener('pageshow', handlePageShow);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('pageshow', handlePageShow);
-    };
-  }, [autoPlay, resumePlayback, stopPolling, syncPlaybackSnapshot]);
+  }, [autoPlay, initialSeekTime, onUnlockAudio, song?.videoId, syncPlaybackState]);
 
   useEffect(() => {
     onPlaybackStateChange?.({ isPlaying, currentTime });
   }, [isPlaying, currentTime, onPlaybackStateChange]);
 
-  // ── Cleanup on unmount ───────────────────────────────────
   useEffect(() => {
     return () => {
       stopPolling();
+      releaseWakeLock();
       try { playerRef.current?.destroy(); } catch {}
     };
-  }, [stopPolling]);
+  }, [releaseWakeLock, stopPolling]);
 
-  // ── Controls ─────────────────────────────────────────────
   const togglePlay = () => {
     if (!playerRef.current) return;
+    onUnlockAudio?.();
     if (isPlaying) {
       playerRef.current.pauseVideo();
     } else {
-      playerRef.current.playVideo();
+      resumePlayback();
     }
   };
 
-  // ── Progress bar interaction ──────────────────────────────
   const seek = useCallback((e) => {
     if (!playerRef.current || !progressBarRef.current) return;
     const rect = progressBarRef.current.getBoundingClientRect();
@@ -301,101 +316,11 @@ const MusicPlayer = ({
     setCurrentTime(seekTo);
   }, []);
 
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!player || typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
-
-    const artwork = song?.thumbnail
-      ? [
-          {
-            src: song.thumbnail,
-            sizes: '512x512',
-            type: 'image/jpeg',
-          },
-        ]
-      : [];
-
-    try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: song?.title || 'Now Playing',
-        artist: song?.channelTitle || 'Solace',
-        album: 'Solace',
-        artwork,
-      });
-    } catch {
-      // ignore metadata setup failures on unsupported browsers
-    }
-
-    const tryPlay = () => {
-      try {
-        player.playVideo();
-      } catch {
-        // ignore playback control failures
-      }
-    };
-
-    const tryPause = () => {
-      try {
-        player.pauseVideo();
-      } catch {
-        // ignore playback control failures
-      }
-    };
-
-    const trySeek = (delta) => {
-      try {
-        const current = player.getCurrentTime?.() ?? 0;
-        const duration = player.getDuration?.() ?? 0;
-        const next = Math.max(0, Math.min(duration || Infinity, current + delta));
-        player.seekTo(next, true);
-      } catch {
-        // ignore playback control failures
-      }
-    };
-
-    navigator.mediaSession.setActionHandler('play', tryPlay);
-    navigator.mediaSession.setActionHandler('pause', tryPause);
-    navigator.mediaSession.setActionHandler('previoustrack', () => onPlayPrev?.());
-    navigator.mediaSession.setActionHandler('nexttrack', () => onPlayNext?.());
-    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-      trySeek(-(details?.seekOffset || 10));
-    });
-    navigator.mediaSession.setActionHandler('seekforward', (details) => {
-      trySeek(details?.seekOffset || 10);
-    });
-    navigator.mediaSession.setActionHandler('seekto', (details) => {
-      if (typeof details?.seekTime !== 'number') return;
-      try {
-        player.seekTo(details.seekTime, true);
-      } catch {
-        // ignore playback control failures
-      }
-    });
-
-    return () => {
-      if (!('mediaSession' in navigator)) return;
-      try {
-        navigator.mediaSession.setActionHandler('play', null);
-        navigator.mediaSession.setActionHandler('pause', null);
-        navigator.mediaSession.setActionHandler('previoustrack', null);
-        navigator.mediaSession.setActionHandler('nexttrack', null);
-        navigator.mediaSession.setActionHandler('seekbackward', null);
-        navigator.mediaSession.setActionHandler('seekforward', null);
-        navigator.mediaSession.setActionHandler('seekto', null);
-      } catch {
-        // ignore cleanup failures
-      }
-    };
-  }, [song?.videoId, song?.title, song?.channelTitle, song?.thumbnail, onPlayNext, onPlayPrev]);
-
   if (!song) return null;
 
   return (
     <>
-      {/* Keep iframe off-screen but mounted so playback persists across routes */}
-      <div
-        style={{ position: 'fixed', top: -9999, left: -9999, width: 200, height: 200, opacity: 0, pointerEvents: 'none' }}
-      >
+      <div style={{ position: 'fixed', top: -9999, left: -9999, width: 200, height: 200, opacity: 0, pointerEvents: 'none' }}>
         <div ref={playerContainerRef} />
       </div>
 
@@ -416,122 +341,85 @@ const MusicPlayer = ({
               border: '1px solid rgba(255,255,255,0.08)',
             }}
           >
-
-        {/* Collapsed mini-bar */}
-        {collapsed ? (
-          <div className="flex items-center gap-3 px-4 py-3">
-            <img
-              src={song.thumbnail}
-              alt={song.title}
-              className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-white truncate">{song.title}</p>
-              <p className="text-[10px] text-white/50 truncate">{song.channelTitle}</p>
-            </div>
-            <button onClick={togglePlay} className="text-white/80 hover:text-white transition-colors p-1">
-              {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            </button>
-            <button onClick={() => setCollapsed(false)} className="text-white/50 hover:text-white transition-colors p-1">
-              <ChevronUp className="w-4 h-4" />
-            </button>
-            <button onClick={onClose} className="text-white/50 hover:text-white transition-colors p-1">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ) : (
-          /* Expanded player */
-          <div className="p-4">
-            {/* Top row */}
-            <div className="flex items-center justify-between mb-4">
-              <button onClick={() => setCollapsed(true)} className="text-white/50 hover:text-white transition-colors">
-                <ChevronDown className="w-5 h-5" />
-              </button>
-              <p className="text-xs text-white/50 font-medium tracking-wider uppercase">Now Playing</p>
-              <button onClick={onClose} className="text-white/50 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Album art */}
-            <div className="flex justify-center mb-5">
-              <motion.div
-                animate={isPlaying ? { scale: [1, 1.02, 1], rotate: [0, 1, -1, 0] } : { scale: 1 }}
-                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                className="w-52 h-52 rounded-2xl overflow-hidden shadow-xl"
-                style={{ boxShadow: isPlaying ? '0 0 40px rgba(200,100,50,0.4)' : '0 8px 32px rgba(0,0,0,0.5)' }}
-              >
-                <img
-                  src={song.thumbnail}
-                  alt={song.title}
-                  className="w-full h-full object-cover"
-                />
-              </motion.div>
-            </div>
-
-            {/* Song info */}
-            <div className="text-center mb-4 px-2">
-              <p className="text-white font-semibold text-base leading-snug truncate">{song.title}</p>
-              <p className="text-white/50 text-sm mt-0.5 truncate">{song.channelTitle}</p>
-            </div>
-
-            {/* Progress bar */}
-            <div className="mb-3 px-1">
-              <div
-                ref={progressBarRef}
-                className="relative h-1.5 bg-white/10 rounded-full cursor-pointer group"
-                onClick={seek}
-              >
-                <motion.div
-                  className="absolute left-0 top-0 h-full rounded-full"
-                  style={{
-                    width: `${progress}%`,
-                    background: 'linear-gradient(90deg, hsl(25,70%,60%), hsl(6,63%,55%))',
-                  }}
-                />
-                {/* Thumb */}
-                <div
-                  className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
-                  style={{ left: `calc(${progress}% - 6px)` }}
-                />
+            {collapsed ? (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <img src={song.thumbnail} alt={song.title} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-white truncate">{song.title}</p>
+                  <p className="text-[10px] text-white/50 truncate">{song.channelTitle}</p>
+                </div>
+                <button onClick={togglePlay} className="text-white/80 hover:text-white transition-colors p-1">
+                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                </button>
+                <button onClick={() => setCollapsed(false)} className="text-white/50 hover:text-white transition-colors p-1">
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+                <button onClick={onClose} className="text-white/50 hover:text-white transition-colors p-1">
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <div className="flex justify-between mt-1.5">
-                <span className="text-white/40 text-[10px]">{fmt(currentTime)}</span>
-                <span className="text-white/40 text-[10px]">{fmt(duration)}</span>
+            ) : (
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <button onClick={() => setCollapsed(true)} className="text-white/50 hover:text-white transition-colors">
+                    <ChevronDown className="w-5 h-5" />
+                  </button>
+                  <p className="text-xs text-white/50 font-medium tracking-wider uppercase">Now Playing</p>
+                  <button onClick={onClose} className="text-white/50 hover:text-white transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex justify-center mb-5">
+                  <motion.div
+                    animate={isPlaying ? { scale: [1, 1.02, 1], rotate: [0, 1, -1, 0] } : { scale: 1 }}
+                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                    className="w-52 h-52 rounded-2xl overflow-hidden shadow-xl"
+                    style={{ boxShadow: isPlaying ? '0 0 40px rgba(200,100,50,0.4)' : '0 8px 32px rgba(0,0,0,0.5)' }}
+                  >
+                    <img src={song.thumbnail} alt={song.title} className="w-full h-full object-cover" />
+                  </motion.div>
+                </div>
+
+                <div className="text-center mb-4 px-2">
+                  <p className="text-white font-semibold text-base leading-snug truncate">{song.title}</p>
+                  <p className="text-white/50 text-sm mt-0.5 truncate">{song.channelTitle}</p>
+                </div>
+
+                <div className="mb-3 px-1">
+                  <div ref={progressBarRef} className="relative h-1.5 bg-white/10 rounded-full cursor-pointer group" onClick={seek}>
+                    <motion.div
+                      className="absolute left-0 top-0 h-full rounded-full"
+                      style={{ width: `${progress}%`, background: 'linear-gradient(90deg, hsl(25,70%,60%), hsl(6,63%,55%))' }}
+                    />
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{ left: `calc(${progress}% - 6px)` }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-1.5">
+                    <span className="text-white/40 text-[10px]">{fmt(currentTime)}</span>
+                    <span className="text-white/40 text-[10px]">{fmt(duration)}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-6">
+                  <button onClick={onPlayPrev} disabled={!onPlayPrev} className="text-white/50 hover:text-white disabled:opacity-20 transition-colors">
+                    <SkipBack className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={togglePlay}
+                    className="w-14 h-14 rounded-full flex items-center justify-center transition-transform active:scale-95"
+                    style={{ background: 'linear-gradient(135deg, hsl(25,65%,55%), hsl(6,63%,46%))' }}
+                  >
+                    {isPlaying ? <Pause className="w-6 h-6 text-white" /> : <Play className="w-6 h-6 text-white ml-0.5" />}
+                  </button>
+                  <button onClick={onPlayNext} disabled={!onPlayNext} className="text-white/50 hover:text-white disabled:opacity-20 transition-colors">
+                    <SkipForward className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
-            </div>
-
-            {/* Controls */}
-            <div className="flex items-center justify-center gap-6">
-              <button
-                onClick={onPlayPrev}
-                disabled={!onPlayPrev}
-                className="text-white/50 hover:text-white disabled:opacity-20 transition-colors"
-              >
-                <SkipBack className="w-5 h-5" />
-              </button>
-
-              <button
-                onClick={togglePlay}
-                className="w-14 h-14 rounded-full flex items-center justify-center transition-transform active:scale-95"
-                style={{ background: 'linear-gradient(135deg, hsl(25,65%,55%), hsl(6,63%,46%))' }}
-              >
-                {isPlaying
-                  ? <Pause className="w-6 h-6 text-white" />
-                  : <Play className="w-6 h-6 text-white ml-0.5" />
-                }
-              </button>
-
-              <button
-                onClick={onPlayNext}
-                disabled={!onPlayNext}
-                className="text-white/50 hover:text-white disabled:opacity-20 transition-colors"
-              >
-                <SkipForward className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        )}
+            )}
           </div>
         </motion.div>
       )}
