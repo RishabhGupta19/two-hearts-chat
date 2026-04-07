@@ -1014,13 +1014,24 @@ const Chat = () => {
                   </div>
                 );
               })}
-              <AnimatePresence>
-                {sending && <TypingIndicator label="Luna" />}
-                {isCalm && partnerTyping && <TypingIndicator label={partnerName || 'Partner'} />}
-              </AnimatePresence>
               <div ref={chatEndRef} />
             </>
           )}
+        </div>
+
+        <div className="relative h-12 shrink-0 px-4 pb-2 pointer-events-none">
+          <AnimatePresence>
+            {sending && (
+              <div className="absolute left-4 right-4 bottom-2">
+                <TypingIndicator label="Luna" />
+              </div>
+            )}
+            {isCalm && partnerTyping && (
+              <div className="absolute left-4 right-4 bottom-2">
+                <TypingIndicator label={partnerName || 'Partner'} />
+              </div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Goal input */}

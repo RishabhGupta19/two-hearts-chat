@@ -6,7 +6,7 @@ import { Toaster as Sonner, toast } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider, useApp } from "@/context/AppContext";
-import MusicPlayer from "@/components/MusicPlayer";
+import MusicPlayer, { loadYTApi } from "@/components/MusicPlayer";
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
 import Assessment from "./pages/Assessment";
@@ -144,6 +144,10 @@ const GlobalMusicPlayer = () => {
 
 const App = () => {
   useEffect(() => {
+    loadYTApi().catch(() => {
+      // best-effort preload; the player will retry when needed
+    });
+
     const enforceFirebaseMessagingWorker = async () => {
       if (!('serviceWorker' in navigator)) return;
 

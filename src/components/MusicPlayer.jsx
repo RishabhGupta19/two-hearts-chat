@@ -6,7 +6,7 @@ import { Play, Pause, X, ChevronDown, ChevronUp, SkipBack, SkipForward } from 'l
 // Load the YouTube IFrame API (only once globally)
 // ────────────────────────────────────────────────────────────
 let ytApiPromise = null;
-const loadYTApi = () => {
+export const loadYTApi = () => {
   if (ytApiPromise) return ytApiPromise;
   ytApiPromise = new Promise((resolve) => {
     if (window.YT && window.YT.Player) {
@@ -37,7 +37,11 @@ const MusicPlayer = ({
 }) => {
   const playerContainerRef = useRef(null);
   const playerRef = useRef(null);
+  const playerReadyRef = useRef(false);
+  const pendingTrackRef = useRef(null);
   const progressIntervalRef = useRef(null);
+  const isPlayingRef = useRef(false);
+  const currentTimeRef = useRef(0);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);        // 0–100
@@ -46,6 +50,14 @@ const MusicPlayer = ({
   const [collapsed, setCollapsed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const progressBarRef = useRef(null);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
 
   // ── Format seconds → mm:ss ──────────────────────────────
   const fmt = (s) => {
@@ -73,7 +85,67 @@ const MusicPlayer = ({
     clearInterval(progressIntervalRef.current);
   }, []);
 
-  // ── Initialise / re-initialise when song changes ─────────
+  const startTrack = useCallback((player, nextSong, startSeconds = 0, forcePlay = true) => {
+    if (!player || !nextSong?.videoId) return;
+
+    const payload = {
+      videoId: nextSong.videoId,
+      startSeconds,
+    };
+
+    try {
+      if (forcePlay) {
+        player.loadVideoById(payload);
+        setIsPlaying(true);
+      } else {
+        player.cueVideoById(payload);
+        setIsPlaying(false);
+      }
+      setCurrentTime(startSeconds);
+      if (startSeconds > 0) {
+        setProgress(0);
+      }
+      startPolling();
+    } catch {
+      // ignore player command errors during fast track switching
+    }
+  }, [startPolling]);
+
+  const syncPlaybackSnapshot = useCallback(() => {
+    const player = playerRef.current;
+    const current = (() => {
+      try {
+        return player?.getCurrentTime?.() ?? currentTimeRef.current ?? 0;
+      } catch {
+        return currentTimeRef.current ?? 0;
+      }
+    })();
+
+    onPlaybackStateChange?.({
+      isPlaying: isPlayingRef.current,
+      currentTime: current,
+    });
+  }, [onPlaybackStateChange]);
+
+  const resumePlayback = useCallback(() => {
+    const player = playerRef.current;
+    if (!player || autoPlay === false) return;
+
+    const seekTime = Number.isFinite(currentTimeRef.current) ? currentTimeRef.current : 0;
+
+    try {
+      if (seekTime > 0) {
+        player.seekTo(seekTime, true);
+      }
+      player.playVideo();
+      startPolling();
+      setIsPlaying(true);
+    } catch {
+      // ignore resume failures; the browser may still be waking the media stack
+    }
+  }, [autoPlay, startPolling]);
+
+  // ── Initialise player once, then reuse it for each track change ─────────
   useEffect(() => {
     if (!song) return;
 
@@ -82,12 +154,11 @@ const MusicPlayer = ({
     loadYTApi().then((YT) => {
       if (destroyed) return;
 
-      // Destroy previous instance
       if (playerRef.current) {
-        try { playerRef.current.destroy(); } catch {}
-        playerRef.current = null;
+        return;
       }
 
+      playerReadyRef.current = false;
       playerRef.current = new YT.Player(playerContainerRef.current, {
         host: 'https://www.youtube.com',
         width: '200',
@@ -107,22 +178,15 @@ const MusicPlayer = ({
         },
         events: {
           onReady: (e) => {
-            if ((initialSeekTime || 0) > 0) {
-              try {
-                e.target.seekTo(initialSeekTime, true);
-                setCurrentTime(initialSeekTime);
-              } catch {
-                // ignore seek errors on initialization
-              }
-            }
-
-            if (autoPlay) {
-              e.target.playVideo();
-              setIsPlaying(true);
-            } else {
-              setIsPlaying(false);
-            }
-            startPolling();
+            playerReadyRef.current = true;
+            const nextSong = pendingTrackRef.current || song;
+            pendingTrackRef.current = null;
+            startTrack(
+              e.target,
+              nextSong,
+              Number.isFinite(initialSeekTime) && initialSeekTime > 0 ? initialSeekTime : 0,
+              autoPlay !== false
+            );
           },
           onStateChange: (e) => {
             const state = e.data;
@@ -130,8 +194,11 @@ const MusicPlayer = ({
               setIsPlaying(true);
               startPolling();
             } else if (state === YT.PlayerState.PAUSED) {
-              setIsPlaying(false);
               stopPolling();
+              if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+                return;
+              }
+              setIsPlaying(false);
             } else if (state === YT.PlayerState.ENDED) {
               setIsPlaying(false);
               stopPolling();
@@ -152,7 +219,52 @@ const MusicPlayer = ({
       destroyed = true;
       stopPolling();
     };
-  }, [song?.videoId, autoPlay, initialSeekTime]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [song]);
+
+  useEffect(() => {
+    if (!song?.videoId) return;
+    if (!playerRef.current || !playerReadyRef.current) {
+      pendingTrackRef.current = song;
+      return;
+    }
+
+    startTrack(playerRef.current, song, 0, true);
+  }, [song?.videoId, song, startTrack]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (typeof document === 'undefined') return;
+      if (document.visibilityState === 'hidden') {
+        syncPlaybackSnapshot();
+        stopPolling();
+        return;
+      }
+
+      if (document.visibilityState === 'visible' && autoPlay) {
+        resumePlayback();
+      }
+    };
+
+    const handlePageHide = () => {
+      syncPlaybackSnapshot();
+      stopPolling();
+    };
+
+    const handlePageShow = (event) => {
+      if (event?.persisted || autoPlay) {
+        resumePlayback();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('pageshow', handlePageShow);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, [autoPlay, resumePlayback, stopPolling, syncPlaybackSnapshot]);
 
   useEffect(() => {
     onPlaybackStateChange?.({ isPlaying, currentTime });
@@ -188,6 +300,93 @@ const MusicPlayer = ({
     setProgress(pct * 100);
     setCurrentTime(seekTo);
   }, []);
+
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player || typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+
+    const artwork = song?.thumbnail
+      ? [
+          {
+            src: song.thumbnail,
+            sizes: '512x512',
+            type: 'image/jpeg',
+          },
+        ]
+      : [];
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: song?.title || 'Now Playing',
+        artist: song?.channelTitle || 'Solace',
+        album: 'Solace',
+        artwork,
+      });
+    } catch {
+      // ignore metadata setup failures on unsupported browsers
+    }
+
+    const tryPlay = () => {
+      try {
+        player.playVideo();
+      } catch {
+        // ignore playback control failures
+      }
+    };
+
+    const tryPause = () => {
+      try {
+        player.pauseVideo();
+      } catch {
+        // ignore playback control failures
+      }
+    };
+
+    const trySeek = (delta) => {
+      try {
+        const current = player.getCurrentTime?.() ?? 0;
+        const duration = player.getDuration?.() ?? 0;
+        const next = Math.max(0, Math.min(duration || Infinity, current + delta));
+        player.seekTo(next, true);
+      } catch {
+        // ignore playback control failures
+      }
+    };
+
+    navigator.mediaSession.setActionHandler('play', tryPlay);
+    navigator.mediaSession.setActionHandler('pause', tryPause);
+    navigator.mediaSession.setActionHandler('previoustrack', () => onPlayPrev?.());
+    navigator.mediaSession.setActionHandler('nexttrack', () => onPlayNext?.());
+    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+      trySeek(-(details?.seekOffset || 10));
+    });
+    navigator.mediaSession.setActionHandler('seekforward', (details) => {
+      trySeek(details?.seekOffset || 10);
+    });
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if (typeof details?.seekTime !== 'number') return;
+      try {
+        player.seekTo(details.seekTime, true);
+      } catch {
+        // ignore playback control failures
+      }
+    });
+
+    return () => {
+      if (!('mediaSession' in navigator)) return;
+      try {
+        navigator.mediaSession.setActionHandler('play', null);
+        navigator.mediaSession.setActionHandler('pause', null);
+        navigator.mediaSession.setActionHandler('previoustrack', null);
+        navigator.mediaSession.setActionHandler('nexttrack', null);
+        navigator.mediaSession.setActionHandler('seekbackward', null);
+        navigator.mediaSession.setActionHandler('seekforward', null);
+        navigator.mediaSession.setActionHandler('seekto', null);
+      } catch {
+        // ignore cleanup failures
+      }
+    };
+  }, [song?.videoId, song?.title, song?.channelTitle, song?.thumbnail, onPlayNext, onPlayPrev]);
 
   if (!song) return null;
 
