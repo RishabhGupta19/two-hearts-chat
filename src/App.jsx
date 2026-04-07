@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider, useApp } from "@/context/AppContext";
 import MusicPlayer from "@/components/MusicPlayer";
+import useBackgroundAudio from "@/hooks/useBackgroundAudio";
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
 import Assessment from "./pages/Assessment";
@@ -143,6 +144,8 @@ const GlobalMusicPlayer = () => {
 // );
 
 const App = () => {
+  useBackgroundAudio();
+
   useEffect(() => {
     const enforceFirebaseMessagingWorker = async () => {
       if (!('serviceWorker' in navigator)) return;
