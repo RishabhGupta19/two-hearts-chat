@@ -91,15 +91,34 @@ const Chat = () => {
   const [layoutReady, setLayoutReady] = useState(false);
 
   useEffect(() => {
-    // On notification cold start the viewport height isn't settled yet.
-    // A short delay lets the browser finalize chrome/safe-area before first paint.
-    const t = setTimeout(() => {
+    const syncViewportHeight = () => {
       try {
-        document.documentElement.style.setProperty('--real-vh', window.innerHeight + 'px');
+        const vh = window.visualViewport?.height || window.innerHeight;
+        document.documentElement.style.setProperty('--real-vh', `${Math.round(vh)}px`);
       } catch (e) {}
-      setLayoutReady(true);
-    }, 80);
-    return () => clearTimeout(t);
+    };
+
+    // On mobile the browser chrome can shift after mount; keep the CSS var fresh.
+    syncViewportHeight();
+    const rafId = window.requestAnimationFrame(syncViewportHeight);
+    const t = window.setTimeout(syncViewportHeight, 120);
+
+    window.addEventListener('resize', syncViewportHeight);
+    window.addEventListener('orientationchange', syncViewportHeight);
+    window.addEventListener('pageshow', syncViewportHeight);
+    window.visualViewport?.addEventListener('resize', syncViewportHeight);
+    window.visualViewport?.addEventListener('scroll', syncViewportHeight);
+    setLayoutReady(true);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(t);
+      window.removeEventListener('resize', syncViewportHeight);
+      window.removeEventListener('orientationchange', syncViewportHeight);
+      window.removeEventListener('pageshow', syncViewportHeight);
+      window.visualViewport?.removeEventListener('resize', syncViewportHeight);
+      window.visualViewport?.removeEventListener('scroll', syncViewportHeight);
+    };
   }, []);
 
   const { recording, audioBlob, duration, startRecording, stopRecording, cancelRecording, setAudioBlob } = useVoiceRecorder();
@@ -797,16 +816,17 @@ const Chat = () => {
   return (
     <ModeWrapper>
       <div
-        className="bg-background flex flex-col relative"
+        className="bg-background flex flex-col relative overflow-x-hidden"
         style={{
           height: 'var(--real-vh, 100dvh)',
+          minHeight: '100dvh',
           visibility: layoutReady ? 'visible' : 'hidden',
         }}
       >
 
         {/* Header */}
-        <header className="sticky top-0 flex items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
-          <div className="flex items-center gap-2 min-w-0 shrink-0">
+        <header className="sticky top-0 flex flex-wrap items-center justify-between px-3 py-2 border-b border-border bg-card z-[999] gap-2 shrink-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             <button
               onClick={() => navigate('/dashboard')}
               className="text-foreground min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer active:opacity-70 -ml-1"
@@ -838,7 +858,7 @@ const Chat = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end max-w-full">
             {isCalm && (
               <button
                 type="button"
@@ -862,7 +882,7 @@ const Chat = () => {
                 animate={{ opacity: 1 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setShowResolution(true)}
-                className="text-[10px] rounded-pill px-2 py-1 bg-muted text-muted-foreground hover:bg-muted/80 font-body whitespace-nowrap"
+                className="text-[9px] sm:text-[10px] rounded-pill px-2 py-1 bg-muted text-muted-foreground hover:bg-muted/80 font-body whitespace-nowrap"
               >
                 Feeling better?
               </motion.button>
@@ -922,7 +942,7 @@ const Chat = () => {
           data-pull-scroll
           ref={chatScrollRef}
           onScroll={handleScroll}
-          className={`flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-1.5 flex flex-col ${isVent ? 'angry-breathing' : ''} ${scrollReady ? 'opacity-100' : 'opacity-0'}`}
+          className={`flex-1 min-h-0 overflow-y-auto px-4 pt-5 pb-4 flex flex-col ${scrollReady ? 'opacity-100' : 'opacity-0'}`}
         >
           {showNotLinkedMessage ? (
             <div className="flex items-center justify-center h-full">

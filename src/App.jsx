@@ -6,6 +6,8 @@ import { Toaster as Sonner, toast } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider, useApp } from "@/context/AppContext";
+import MusicPlayer from "@/components/MusicPlayer";
+import useBackgroundAudio from "@/hooks/useBackgroundAudio";
 import MusicPlayer, { loadYTApi } from "@/components/MusicPlayer";
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
@@ -91,12 +93,14 @@ if (!onboardingComplete) {
   );
 };
 
+const GlobalMusicPlayer = ({ onUnlockAudio }) => {
 const GlobalMusicPlayer = () => {
   const {
     currentSong,
     currentQueue,
     currentIndex,
     musicWasPlaying,
+    musicShouldResume,
     musicPosition,
     playNextTrack,
     playPrevTrack,
@@ -113,6 +117,9 @@ const GlobalMusicPlayer = () => {
           visible={showPlayerUi}
           song={currentSong}
           queue={currentQueue}
+          autoPlay={musicShouldResume || musicWasPlaying}
+          initialSeekTime={musicPosition}
+          onUnlockAudio={onUnlockAudio}
           autoPlay={musicWasPlaying}
           initialSeekTime={musicPosition}
           onPlaybackStateChange={updateMusicPlayback}
@@ -143,6 +150,8 @@ const GlobalMusicPlayer = () => {
 // );
 
 const App = () => {
+  const { unlock } = useBackgroundAudio();
+
   useEffect(() => {
     loadYTApi().catch(() => {
       // best-effort preload; the player will retry when needed
@@ -190,7 +199,7 @@ const App = () => {
         <AppProvider>
           <HashRouter>
             <AppRoutes />
-            <GlobalMusicPlayer />
+            <GlobalMusicPlayer onUnlockAudio={unlock} />
             <IOSInstallBanner />
           </HashRouter>
         </AppProvider>
