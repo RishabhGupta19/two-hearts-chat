@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider, useApp } from "@/context/AppContext";
 import MusicPlayer from "@/components/MusicPlayer";
 import useBackgroundAudio from "@/hooks/useBackgroundAudio";
+import MusicPlayer, { loadYTApi } from "@/components/MusicPlayer";
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
 import Assessment from "./pages/Assessment";
@@ -93,6 +94,7 @@ if (!onboardingComplete) {
 };
 
 const GlobalMusicPlayer = ({ onUnlockAudio }) => {
+const GlobalMusicPlayer = () => {
   const {
     currentSong,
     currentQueue,
@@ -118,6 +120,8 @@ const GlobalMusicPlayer = ({ onUnlockAudio }) => {
           autoPlay={musicShouldResume || musicWasPlaying}
           initialSeekTime={musicPosition}
           onUnlockAudio={onUnlockAudio}
+          autoPlay={musicWasPlaying}
+          initialSeekTime={musicPosition}
           onPlaybackStateChange={updateMusicPlayback}
           onClose={closeMusicPlayer}
           onPlayNext={currentIndex < currentQueue.length - 1 ? playNextTrack : null}
@@ -149,6 +153,10 @@ const App = () => {
   const { unlock } = useBackgroundAudio();
 
   useEffect(() => {
+    loadYTApi().catch(() => {
+      // best-effort preload; the player will retry when needed
+    });
+
     const enforceFirebaseMessagingWorker = async () => {
       if (!('serviceWorker' in navigator)) return;
 

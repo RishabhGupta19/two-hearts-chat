@@ -22,7 +22,6 @@ const readPersistedMusicState = () => {
       currentQueue: Array.isArray(parsed.currentQueue) ? parsed.currentQueue : [],
       currentIndex: Number.isFinite(parsed.currentIndex) ? parsed.currentIndex : 0,
       musicWasPlaying: Boolean(parsed.musicWasPlaying),
-      musicShouldResume: Boolean(parsed.musicShouldResume),
       musicPosition: Number.isFinite(parsed.musicPosition) ? parsed.musicPosition : 0,
     };
   } catch {
@@ -60,7 +59,6 @@ const defaultState = {
   currentQueue: persistedMusicState?.currentQueue || [],
   currentIndex: persistedMusicState?.currentIndex || 0,
   musicWasPlaying: persistedMusicState?.musicWasPlaying || false,
-  musicShouldResume: persistedMusicState?.musicShouldResume || false,
   musicPosition: persistedMusicState?.musicPosition || 0,
   loading: true,
 };
@@ -733,7 +731,6 @@ export const AppProvider = ({ children }) => {
       currentQueue: normalizedQueue,
       currentIndex: index >= 0 ? index : 0,
       musicWasPlaying: true,
-      musicShouldResume: true,
       musicPosition: 0,
     }));
   }, []);
@@ -748,7 +745,6 @@ export const AppProvider = ({ children }) => {
         currentSong: s.currentQueue[nextIndex] || s.currentSong,
         musicPosition: 0,
         musicWasPlaying: true,
-        musicShouldResume: true,
       };
     });
   }, []);
@@ -763,21 +759,14 @@ export const AppProvider = ({ children }) => {
         currentSong: s.currentQueue[prevIndex] || s.currentSong,
         musicPosition: 0,
         musicWasPlaying: true,
-        musicShouldResume: true,
       };
     });
   }, []);
 
-  const updateMusicPlayback = useCallback(({ isPlaying, currentTime, shouldResume }) => {
+  const updateMusicPlayback = useCallback(({ isPlaying, currentTime }) => {
     setState((s) => ({
       ...s,
       musicWasPlaying: typeof isPlaying === 'boolean' ? isPlaying : s.musicWasPlaying,
-      musicShouldResume:
-        typeof shouldResume === 'boolean'
-          ? shouldResume
-          : typeof isPlaying === 'boolean'
-            ? isPlaying || s.musicShouldResume
-            : s.musicShouldResume,
       musicPosition: Number.isFinite(currentTime) ? currentTime : s.musicPosition,
     }));
   }, []);
@@ -789,7 +778,6 @@ export const AppProvider = ({ children }) => {
       currentQueue: [],
       currentIndex: 0,
       musicWasPlaying: false,
-      musicShouldResume: false,
       musicPosition: 0,
     }));
   }, []);
@@ -810,14 +798,13 @@ export const AppProvider = ({ children }) => {
           currentQueue: state.currentQueue,
           currentIndex: state.currentIndex,
           musicWasPlaying: state.musicWasPlaying,
-          musicShouldResume: state.musicShouldResume,
           musicPosition: state.musicPosition,
         })
       );
     } catch {
       // ignore storage errors
     }
-  }, [state.currentSong, state.currentQueue, state.currentIndex, state.musicWasPlaying, state.musicShouldResume, state.musicPosition]);
+  }, [state.currentSong, state.currentQueue, state.currentIndex, state.musicWasPlaying, state.musicPosition]);
 
   return (
     <AppContext.Provider
@@ -851,6 +838,7 @@ export const AppProvider = ({ children }) => {
         playNextTrack,
         playPrevTrack,
         closeMusicPlayer,
+        updateMusicPlayback,
         deleteMessage,
         searchMessages,
         fetchMessageContext,
