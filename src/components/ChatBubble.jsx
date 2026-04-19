@@ -33,7 +33,7 @@ const ChatBubbleComponent = ({ message, index, seen, onReply, onReplyPreviewClic
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: Math.min(index, 4) * 0.02 }}
-      className={`mb-3 flex w-full ${isMine ? 'justify-end pr-1' : 'justify-start pl-1'}`}
+      className={`mb-2 flex w-full items-end ${isMine ? 'justify-end' : 'justify-start'}`}
       onDoubleClick={() => {
         if (!onReply || mode !== 'calm' || isAI || isDeleted) return;
         onReply(message);
@@ -52,23 +52,23 @@ const ChatBubbleComponent = ({ message, index, seen, onReply, onReplyPreviewClic
       }}
     >
       {!isMine && (
-        <div className="mr-2 flex-shrink-0">
+        <div className="mr-2 flex-shrink-0 self-end mb-0.5">
           {mode === 'calm' ? (
             partnerProfilePic ? (
-              <img src={partnerProfilePic} alt={partnerName || 'Partner'} className="h-8 w-8 rounded-full object-contain object-center block p-0.5" />
+              <img src={partnerProfilePic} alt={partnerName || 'Partner'} className="h-7 w-7 rounded-full object-cover object-center block" />
             ) : (
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-medium text-primary">{(partnerName || 'P').charAt(0).toUpperCase()}</span>
+              <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
+                <span className="text-xs font-medium text-primary">{(partnerName || 'P').charAt(0).toUpperCase()}</span>
               </div>
             )
           ) : (
-            <div className="h-8 w-8 rounded-full bg-muted" />
+            <div className="h-7 w-7 rounded-full bg-muted" />
           )}
         </div>
       )}
 
       <div
-        className={`group relative max-w-[72%] rounded-2xl px-3 py-2 text-[12px] font-body break-words transition-all ${highlighted ? 'ring-2 ring-primary/70' : ''} ${
+        className={`group relative max-w-[75%] rounded-2xl px-3 py-2 text-[12px] font-body break-words transition-all ${highlighted ? 'ring-2 ring-primary/70' : ''} ${
           isMine
             ? 'bg-primary text-primary-foreground rounded-br-sm'
             : isAI
