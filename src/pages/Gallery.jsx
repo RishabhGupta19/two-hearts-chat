@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
-import { supabase } from '@/integrations/supabase/supabaseClient';
+import api from '@/api';
 import { ArrowLeft, Plus, Loader2, ImagePlus } from 'lucide-react';
 import { toast } from 'sonner';
 import PhotoTile from '@/components/PhotoTile';
@@ -44,17 +44,8 @@ const Gallery = () => {
 
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('gallery_photos')
-        .select('*')
-        .eq('couple_id', coupleId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Supabase error:', error.message, error.details, error.code);
-        throw error;
-      }
-      setPhotos(data || []);
+      const { data } = await api.get('/gallery/photos');
+      setPhotos(data.photos || []);
     } catch (err) {
       console.error('Failed to fetch photos:', err);
       toast.error('Failed to load photos');
@@ -84,48 +75,18 @@ const Gallery = () => {
     try {
       setUploading(true);
 
-      // Generate unique filename
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substr(2, 9);
-      const fileName = `${timestamp}-${random}-${file.name}`;
-      const filePath = `${coupleId}/${fileName}`;
+      const formData = new FormData();
+      formData.append('image', file);
 
-      // Upload to Supabase Storage
-      const { data, error: uploadError } = await supabase.storage
-        .from('gallery')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('gallery')
-        .getPublicUrl(filePath);
-
-      const imageUrl = urlData.publicUrl;
-
-      // Save metadata to database
-      const { error: dbError } = await supabase.from('gallery_photos').insert([
-        {
-          couple_id: coupleId,
-          uploaded_by: user.id,
-          image_url: imageUrl,
-          created_at: new Date().toISOString(),
-          note: null,
-        },
-      ]);
-
-      if (dbError) {
-        console.error('Database error:', dbError);
-        toast.error('Failed to save photo. Please try again.');
-        return;
-      }
+      await api.post('/gallery/photos', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
 
       toast.success('Photo uploaded! 📸');
       await fetchPhotos();
     } catch (err) {
       console.error('Upload failed:', err);
-      toast.error(err.message || 'Failed to upload photo');
+      toast.error(err?.response?.data?.error || err.message || 'Failed to upload photo');
     } finally {
       setUploading(false);
     }
@@ -136,25 +97,7 @@ const Gallery = () => {
 
     try {
       setUploading(true);
-
-      // Delete from storage
-      if (photo.image_url) {
-        const filePath = photo.image_url.split('/').slice(-2).join('/');
-        const { error: storageError } = await supabase.storage
-          .from('gallery')
-          .remove([filePath]);
-
-        if (storageError) console.error('Storage delete error:', storageError);
-      }
-
-      // Delete from database
-      const { error: dbError } = await supabase
-        .from('gallery_photos')
-        .delete()
-        .eq('id', photo.id);
-
-      if (dbError) throw dbError;
-
+      await api.delete(`/gallery/photos/${photo.id}`);
       toast.success('Image deleted');
       await fetchPhotos();
     } catch (err) {
