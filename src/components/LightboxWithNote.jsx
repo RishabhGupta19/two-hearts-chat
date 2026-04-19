@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { motion } from 'framer-motion';
 import { X, Edit3, Save, Trash2, Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/supabaseClient';
+import api from '@/api';
 import { toast } from 'sonner';
 
 // Extract dominant color from image (same as PhotoTile)
@@ -59,12 +59,7 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
   const handleSaveNote = async () => {
     try {
       setIsSaving(true);
-      const { error } = await supabase
-        .from('gallery_photos')
-        .update({ note: noteText || null })
-        .eq('id', photo.id);
-
-      if (error) throw error;
+      await api.put(`/gallery/photos/${photo.id}/note`, { note: noteText || null });
       toast.success('Note saved! 📝');
       setIsEditing(false);
       setIsFlipped(false);
@@ -80,12 +75,7 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
   const handleDeleteNote = async () => {
     try {
       setIsSaving(true);
-      const { error } = await supabase
-        .from('gallery_photos')
-        .update({ note: null })
-        .eq('id', photo.id);
-
-      if (error) throw error;
+      await api.put(`/gallery/photos/${photo.id}/note`, { note: null });
       toast.success('Note deleted');
       setNoteText('');
       setIsEditing(false);
@@ -102,25 +92,7 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
   const handleDeletePhoto = async () => {
     try {
       setIsSaving(true);
-
-      // Delete from storage
-      if (photo.image_url) {
-        const filePath = photo.image_url.split('/').slice(-2).join('/');
-        const { error: storageError } = await supabase.storage
-          .from('gallery')
-          .remove([filePath]);
-
-        if (storageError) console.error('Storage delete error:', storageError);
-      }
-
-      // Delete from database
-      const { error: dbError } = await supabase
-        .from('gallery_photos')
-        .delete()
-        .eq('id', photo.id);
-
-      if (dbError) throw dbError;
-
+      await api.delete(`/gallery/photos/${photo.id}`);
       toast.success('Photo deleted');
       if (onNoteUpdate) await onNoteUpdate();
       onClose();
