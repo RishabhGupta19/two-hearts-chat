@@ -6,7 +6,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider, useApp } from "@/context/AppContext";
-import MusicPlayer, { loadYTApi } from "@/components/MusicPlayer";
+import MusicPlayer from "@/components/MusicPlayer";
 import useBackgroundAudio from "@/hooks/useBackgroundAudio";
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
@@ -126,10 +126,6 @@ const App = () => {
   const { unlock } = useBackgroundAudio();
 
   useEffect(() => {
-    loadYTApi().catch(() => {
-      // best-effort preload; the player will retry when needed
-    });
-
     const enforceFirebaseMessagingWorker = async () => {
       if (!('serviceWorker' in navigator)) return;
 

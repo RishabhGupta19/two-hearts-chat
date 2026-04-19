@@ -3,7 +3,7 @@
  *
  * All library reads/writes go to the Django + MongoDB backend.
  * localStorage is used only as:
- *   - a search-result cache (to save YouTube quota)
+ *   - a search-result cache (to reduce redundant network calls)
  *   - an optimistic offline mirror (so the UI never blocks)
  */
 
@@ -29,17 +29,18 @@ export const saveToLibrary = async (song) => {
     title:        song.title,
     channelTitle: song.channelTitle || '',
     thumbnail:    song.thumbnail    || '',
+    audioUrl:     song.audioUrl     || '',
   });
   return data; // the serialised song (or existing one if duplicate)
 };
 
-/** Remove a song by its YouTube videoId */
+/** Remove a song by its ID */
 export const removeFromLibrary = async (videoId) => {
   await api.delete(`/music/library/${videoId}`);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Search cache  (localStorage — keeps quota spending low)
+// Search cache  (localStorage — avoids redundant API calls)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const getCachedSearch = (query) => {
