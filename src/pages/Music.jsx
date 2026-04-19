@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Search,
@@ -77,20 +77,32 @@ const searchJioSaavn = async (query) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SongCard
 // ─────────────────────────────────────────────────────────────────────────────
-const SongCard = ({ song, onPlay, onSave, onRemove, inLibrary, isActive, saving }) => (
+const SongCard = ({ song, onPlay, onSave, onRemove, inLibrary, isActive, saving, highlighted, highlightRef }) => (
   <motion.div
+    ref={highlightRef}
     layout
     initial={{ opacity: 0, y: 10 }}
-    animate={{ opacity: 1, y: 0 }}
+    animate={{
+      opacity: 1,
+      y: 0,
+      boxShadow: highlighted
+        ? ['0 0 0px rgba(234,179,8,0)', '0 0 20px rgba(234,179,8,0.5)', '0 0 0px rgba(234,179,8,0)']
+        : '0 0 0px rgba(0,0,0,0)',
+    }}
+    transition={highlighted ? { boxShadow: { repeat: Infinity, duration: 1.5 } } : undefined}
     exit={{ opacity: 0, y: -10 }}
     className="flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer group"
     style={{
-      background: isActive
-        ? 'linear-gradient(135deg, rgba(200,120,80,0.18) 0%, rgba(180,80,60,0.12) 100%)'
-        : 'hsl(var(--card))',
-      border: isActive
-        ? '1px solid rgba(200,120,80,0.35)'
-        : '1px solid hsl(var(--border))',
+      background: highlighted
+        ? 'linear-gradient(135deg, rgba(234,179,8,0.15) 0%, rgba(234,179,8,0.08) 100%)'
+        : isActive
+          ? 'linear-gradient(135deg, rgba(200,120,80,0.18) 0%, rgba(180,80,60,0.12) 100%)'
+          : 'hsl(var(--card))',
+      border: highlighted
+        ? '2px solid rgba(234,179,8,0.6)'
+        : isActive
+          ? '1px solid rgba(200,120,80,0.35)'
+          : '1px solid hsl(var(--border))',
     }}
     onClick={() => onPlay(song)}
   >
@@ -150,6 +162,7 @@ const SongCard = ({ song, onPlay, onSave, onRemove, inLibrary, isActive, saving 
 // ─────────────────────────────────────────────────────────────────────────────
 const Music = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentSong, startMusicPlayback, closeMusicPlayer } = useApp();
 
   const [tab, setTab] = useState('search');
@@ -163,6 +176,9 @@ const Music = () => {
   const [libraryError, setLibraryError] = useState('');
   // Track per-song loading states
   const [savingIds, setSavingIds] = useState(new Set());
+  // Highlight a specific song (from notification deep-link)
+  const [highlightId, setHighlightId] = useState(null);
+  const highlightRef = useRef(null);
 
   const inputRef = useRef(null);
   const debounceRef = useRef(null);
@@ -183,6 +199,24 @@ const Music = () => {
   }, []);
 
   useEffect(() => { loadLibrary(); }, [loadLibrary]);
+
+  // ── Handle highlight from notification deep-link ─────────────────────────
+  useEffect(() => {
+    const hlParam = searchParams.get('highlight');
+    if (hlParam && !libraryLoading) {
+      setTab('library');
+      setHighlightId(hlParam);
+      // Clear the query param so refreshing doesn't re-trigger
+      setSearchParams({}, { replace: true });
+      // Auto-scroll after a short delay for DOM to render
+      setTimeout(() => {
+        highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+      // Remove highlight after 5 seconds
+      const timer = setTimeout(() => setHighlightId(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, libraryLoading]);
 
   // ── Search ───────────────────────────────────────────────────────────────
   const doSearch = useCallback(async (q) => {
@@ -512,6 +546,8 @@ const Music = () => {
                         inLibrary
                         isActive={currentSong?.videoId === song.videoId}
                         saving={savingIds.has(song.videoId)}
+                        highlighted={highlightId === song.videoId}
+                        highlightRef={highlightId === song.videoId ? highlightRef : undefined}
                       />
                     ))}
                   </AnimatePresence>
