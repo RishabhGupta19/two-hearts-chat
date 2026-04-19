@@ -942,7 +942,7 @@ const Chat = () => {
           data-pull-scroll
           ref={chatScrollRef}
           onScroll={handleScroll}
-          className={`flex-1 min-h-0 overflow-y-auto px-4 pt-5 pb-4 flex flex-col ${scrollReady ? 'opacity-100' : 'opacity-0'}`}
+          className={`flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-2 flex flex-col ${scrollReady ? 'opacity-100' : 'opacity-0'}`}
         >
           {showNotLinkedMessage ? (
             <div className="flex items-center justify-center h-full">
@@ -1039,20 +1039,18 @@ const Chat = () => {
           )}
         </div>
 
-        <div className="relative h-12 shrink-0 px-4 pb-2 pointer-events-none">
-          <AnimatePresence>
-            {sending && (
-              <div className="absolute left-4 right-4 bottom-2">
-                <TypingIndicator label="Luna" />
-              </div>
-            )}
-            {isCalm && partnerTyping && (
-              <div className="absolute left-4 right-4 bottom-2">
-                <TypingIndicator label={partnerName || 'Partner'} />
-              </div>
-            )}
-          </AnimatePresence>
-        </div>
+        <AnimatePresence>
+          {sending && (
+            <div className="px-4 pb-1">
+              <TypingIndicator label="Luna" />
+            </div>
+          )}
+          {isCalm && partnerTyping && (
+            <div className="px-4 pb-1">
+              <TypingIndicator label={partnerName || 'Partner'} />
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* Goal input */}
         <AnimatePresence>

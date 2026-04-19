@@ -197,31 +197,86 @@ const MusicPlayer = ({
     } catch {}
   }, [currentTime, duration]);
 
-  // ── Visibility change — resume playback when PWA returns to foreground ────
-  // This is the fix for music stopping when the app is backgrounded.
+  // ── Visibility change — fight browser suspension of YT iframe ───────────
+  // Strategy:
+  //   • When going hidden AND was playing → start a periodic "nudge" that
+  //     calls playVideo() every few seconds to resist browser suspension.
+  //   • When coming back visible → immediately resume + retry on delays.
+  //   • Also listen for window 'focus' for alt-tab / task-switcher returns.
   useEffect(() => {
+    let nudgeTimer = null;
+
+    const startNudge = () => {
+      stopNudge();
+      nudgeTimer = setInterval(() => {
+        if (!playerRef.current) return;
+        try {
+          const state = playerRef.current.getPlayerState?.();
+          // YT.PlayerState.PAUSED = 2, PLAYING = 1
+          if (state === 2 || state === -1) {
+            playerRef.current.playVideo();
+          }
+        } catch { /* ignore */ }
+      }, 8000);
+    };
+
+    const stopNudge = () => {
+      if (nudgeTimer) { clearInterval(nudgeTimer); nudgeTimer = null; }
+    };
+
+    const tryResume = () => {
+      if (!playerRef.current) return;
+      onUnlockAudioRef.current?.();
+      try {
+        const state = playerRef.current.getPlayerState?.();
+        if (state !== 1) { // not already PLAYING
+          playerRef.current.playVideo();
+        }
+      } catch { /* ignore */ }
+      syncPlaybackStateRef.current();
+      requestWakeLock();
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         wasPlayingBeforeHideRef.current = isPlayingRef.current;
         releaseWakeLock();
+        // Start nudging if user didn't explicitly pause
+        if (isPlayingRef.current && resumeOnVisibleRef.current) {
+          startNudge();
+        }
       } else {
         // Came back to foreground
+        stopNudge();
         if (wasPlayingBeforeHideRef.current && resumeOnVisibleRef.current) {
-          // User didn't explicitly pause — resume automatically
-          resumePlayback();
-          requestWakeLock();
+          // Aggressive retry ladder: immediate, 300ms, 1s
+          tryResume();
+          setTimeout(tryResume, 300);
+          setTimeout(tryResume, 1000);
         } else {
-          // Was paused by user or stopped — just sync UI state
           syncPlaybackStateRef.current();
         }
       }
     };
+
+    const handleFocus = () => {
+      stopNudge();
+      if (wasPlayingBeforeHideRef.current && resumeOnVisibleRef.current) {
+        tryResume();
+        setTimeout(tryResume, 500);
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      stopNudge();
       releaseWakeLock();
     };
-  }, [releaseWakeLock, requestWakeLock, resumePlayback]);
+  }, [releaseWakeLock, requestWakeLock]);
 
   // ── Init YouTube player ───────────────────────────────────────────────────
   // IMPORTANT: dep array is [song?.videoId, autoPlay, initialSeekTime] only.
