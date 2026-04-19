@@ -35,7 +35,8 @@ api.interceptors.response.use(
       } catch (refreshErr) {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
-        window.location.href = '/';
+
+        window.dispatchEvent(new Event('auth:logout'));
         return Promise.reject(refreshErr);
       }
     }
