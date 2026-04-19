@@ -1,90 +1,45 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 
 /**
- * Keeps a silent <audio> loop running to prevent the browser from suspending
- * the audio context when the PWA is backgrounded.  Also creates and resumes
- * an AudioContext on every foreground return so the Web Audio pipeline stays
- * alive — this is the key trick that gives YouTube's iframe the best chance
- * of continuing playback.
+ * useBackgroundAudio
+ *
+ * With native <audio> playback (JioSaavn MP3s), background audio works
+ * natively. This hook provides a minimal AudioContext unlock helper
+ * that the App component can call on user gestures to ensure the browser
+ * allows audio playback.
  */
 const useBackgroundAudio = () => {
-  const silentAudioRef = useRef(null);
-  const audioCtxRef = useRef(null);
+  const audioContextRef = useRef(null);
 
-  // ── Create / resume a Web AudioContext ─────────────────────────────────
-  const ensureAudioContext = useCallback(() => {
+  const unlock = useCallback(() => {
     try {
-      if (!audioCtxRef.current) {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (AudioCtx) audioCtxRef.current = new AudioCtx();
+      if (!audioContextRef.current) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioContextRef.current = new AC();
       }
-      if (audioCtxRef.current?.state === 'suspended') {
-        audioCtxRef.current.resume().catch(() => {});
+      if (audioContextRef.current?.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
       }
-    } catch { /* ignore */ }
+    } catch {}
   }, []);
 
-  // ── Create the silent audio element & start looping ────────────────────
-  const unlock = useCallback(() => {
-    // Silent audio element — keeps the browser audio session alive
-    if (!silentAudioRef.current) {
-      const audio = new Audio('/silence.mp3');
-      audio.loop = true;
-      audio.volume = 0.001;
-      audio.preload = 'auto';
-      // setAttribute to hint at OS-level media session handling
-      audio.setAttribute('playsinline', '');
-      audio.play().catch(() => {});
-      silentAudioRef.current = audio;
-    } else {
-      // Already created — just make sure it's playing
-      silentAudioRef.current.play().catch(() => {});
-    }
-
-    ensureAudioContext();
-  }, [ensureAudioContext]);
-
-  // ── Re-activate everything on foreground return ────────────────────────
+  // Resume AudioContext when the page becomes visible again
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        // Re-play silent audio to re-activate the audio session
-        if (silentAudioRef.current) {
-          silentAudioRef.current.play().catch(() => {});
+        if (audioContextRef.current?.state === 'suspended') {
+          audioContextRef.current.resume().catch(() => {});
         }
-        // Resume the AudioContext in case iOS/Android suspended it
-        ensureAudioContext();
       }
     };
 
-    // Also listen for the page gaining focus (covers alt-tab scenarios)
-    const handleFocus = () => {
-      if (silentAudioRef.current) {
-        silentAudioRef.current.play().catch(() => {});
-      }
-      ensureAudioContext();
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [ensureAudioContext]);
+  }, []);
 
-  // ── Auto-unlock on first user gesture ──────────────────────────────────
-  useEffect(() => {
-    const events = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'];
-    events.forEach((e) => document.addEventListener(e, unlock, { once: true }));
-
-    return () => {
-      events.forEach((e) => document.removeEventListener(e, unlock));
-    };
-  }, [unlock]);
-
-  return { unlock, silentAudioRef };
+  return { unlock };
 };
 
 export default useBackgroundAudio;

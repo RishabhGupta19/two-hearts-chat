@@ -2,21 +2,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Pause, X, ChevronDown, ChevronUp, SkipBack, SkipForward } from 'lucide-react';
 
-// ── Load YouTube IFrame API once globally ────────────────────────────────────
-let ytApiPromise = null;
-export const loadYTApi = () => {
-  if (ytApiPromise) return ytApiPromise;
-  ytApiPromise = new Promise((resolve) => {
-    if (window.YT && window.YT.Player) { resolve(window.YT); return; }
-    const tag = document.createElement('script');
-    tag.src = 'https://www.youtube.com/iframe_api';
-    document.head.appendChild(tag);
-    window.onYouTubeIframeAPIReady = () => resolve(window.YT);
-  });
-  return ytApiPromise;
-};
-
 // ── MusicPlayer component ─────────────────────────────────────────────────────
+// Uses a native <audio> element with direct MP3 URLs from JioSaavn.
+// Background playback works natively — no iframe hacks needed.
 const MusicPlayer = ({
   song,
   queue = [],
@@ -29,30 +17,22 @@ const MusicPlayer = ({
   onUnlockAudio,
   onPlaybackStateChange,
 }) => {
-  const playerContainerRef = useRef(null);
-  const playerRef = useRef(null);
-  const progressIntervalRef = useRef(null);
+  const audioRef = useRef(null);
   const wakeLockRef = useRef(null);
+  const progressIntervalRef = useRef(null);
 
-  // ── Refs that were missing and crashing togglePlay ────────────────────────
-  const lastPauseReasonRef = useRef(null);       // 'user' | null
-  const resumeOnVisibleRef = useRef(true);        // false when user explicitly paused
-  const wasPlayingBeforeHideRef = useRef(false);  // track playback state before backgrounding
+  const lastPauseReasonRef = useRef(null);
+  const resumeOnVisibleRef = useRef(true);
 
-  // ── Capture initial autoPlay / seekTime so the player init effect never
-  //    has to re-run when these props change after first mount. ──────────────
+  // Capture initial values via refs so player init doesn't re-trigger
   const autoPlayRef = useRef(autoPlay);
   const initialSeekTimeRef = useRef(initialSeekTime);
-  // Update only when song changes so the next song's initial values are correct
   useEffect(() => {
     autoPlayRef.current = autoPlay;
     initialSeekTimeRef.current = initialSeekTime;
   }, [song?.videoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Stable prop refs ──────────────────────────────────────────────────────
-  // Updated every render (no dep array) so callbacks inside effects always see
-  // the current function without being listed in dep arrays.
-  // This is the core fix that breaks the render loop causing stop/play flicker.
+  // Stable prop refs — updated every render, never in dep arrays
   const onPlaybackStateChangeRef = useRef(onPlaybackStateChange);
   const onPlayNextRef = useRef(onPlayNext);
   const onPlayPrevRef = useRef(onPlayPrev);
@@ -69,7 +49,6 @@ const MusicPlayer = ({
   const [collapsed, setCollapsed] = useState(false);
   const progressBarRef = useRef(null);
 
-  // Keep isPlaying in a ref so event handlers can read it without stale closures
   const isPlayingRef = useRef(false);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
 
@@ -78,27 +57,6 @@ const MusicPlayer = ({
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
-
-  // ── Progress polling ──────────────────────────────────────────────────────
-  // Only updates UI state. Intentionally does NOT call onPlaybackStateChange —
-  // that was the source of the stop/play render loop.
-  const startPolling = useCallback(() => {
-    clearInterval(progressIntervalRef.current);
-    progressIntervalRef.current = setInterval(() => {
-      if (!playerRef.current) return;
-      try {
-        const ct = playerRef.current.getCurrentTime?.() ?? 0;
-        const dur = playerRef.current.getDuration?.() ?? 0;
-        setCurrentTime(ct);
-        setDuration(dur);
-        if (dur > 0) setProgress((ct / dur) * 100);
-      } catch {}
-    }, 500);
-  }, []);
-
-  const stopPolling = useCallback(() => {
-    clearInterval(progressIntervalRef.current);
-  }, []);
 
   // ── Screen Wake Lock ──────────────────────────────────────────────────────
   const requestWakeLock = useCallback(async () => {
@@ -115,39 +73,71 @@ const MusicPlayer = ({
     finally { wakeLockRef.current = null; }
   }, []);
 
-  // ── Sync UI from YT player state (no onPlaybackStateChange call) ──────────
-  const syncPlaybackState = useCallback(() => {
-    const player = playerRef.current;
-    if (!player) { setIsPlaying(false); stopPolling(); return false; }
-
-    let state = null, ct = 0, dur = 0;
-    try {
-      state = player.getPlayerState?.();
-      ct = player.getCurrentTime?.() ?? 0;
-      dur = player.getDuration?.() ?? 0;
-    } catch { state = null; }
-
-    const isActuallyPlaying = state === window.YT?.PlayerState?.PLAYING;
+  // ── Audio event handlers ──────────────────────────────────────────────────
+  const handleTimeUpdate = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const ct = audio.currentTime || 0;
+    const dur = audio.duration || 0;
     setCurrentTime(ct);
     setDuration(dur);
-    setProgress(dur > 0 ? (ct / dur) * 100 : 0);
-    setIsPlaying(isActuallyPlaying);
-
-    if (isActuallyPlaying) { startPolling(); requestWakeLock(); }
-    else { stopPolling(); }
-    return isActuallyPlaying;
-  }, [requestWakeLock, startPolling, stopPolling]);
-
-  // Keep syncPlaybackState in a ref so effects can call it without dep-array issues
-  const syncPlaybackStateRef = useRef(syncPlaybackState);
-  useEffect(() => { syncPlaybackStateRef.current = syncPlaybackState; }, [syncPlaybackState]);
-
-  // ── Resume playback ───────────────────────────────────────────────────────
-  const resumePlayback = useCallback(() => {
-    if (!playerRef.current) return;
-    onUnlockAudioRef.current?.();
-    try { playerRef.current.playVideo(); } catch {}
+    if (dur > 0) setProgress((ct / dur) * 100);
   }, []);
+
+  const handlePlay = useCallback(() => {
+    setIsPlaying(true);
+    requestWakeLock();
+    const audio = audioRef.current;
+    if (audio) {
+      onPlaybackStateChangeRef.current?.({ isPlaying: true, currentTime: audio.currentTime || 0 });
+    }
+  }, [requestWakeLock]);
+
+  const handlePause = useCallback(() => {
+    setIsPlaying(false);
+    releaseWakeLock();
+  }, [releaseWakeLock]);
+
+  const handleEnded = useCallback(() => {
+    setIsPlaying(false);
+    releaseWakeLock();
+    onPlayNextRef.current?.();
+  }, [releaseWakeLock]);
+
+  const handleLoadedMetadata = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    setDuration(audio.duration || 0);
+    // Seek to initial position if resuming
+    if ((initialSeekTimeRef.current || 0) > 0) {
+      audio.currentTime = initialSeekTimeRef.current;
+    }
+    // Auto-play if requested
+    if (autoPlayRef.current) {
+      onUnlockAudioRef.current?.();
+      audio.play().catch(() => {});
+    }
+  }, []);
+
+  // ── Set up audio element when song changes ────────────────────────────────
+  useEffect(() => {
+    if (!song?.audioUrl) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    // Reset state
+    setProgress(0);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(false);
+
+    // The src is set via JSX, but we need to load the new source
+    audio.load();
+
+    return () => {
+      releaseWakeLock();
+    };
+  }, [song?.audioUrl, song?.videoId, releaseWakeLock]);
 
   // ── Media Session API (lock screen / notification shade controls) ─────────
   useEffect(() => {
@@ -163,24 +153,25 @@ const MusicPlayer = ({
     });
     navigator.mediaSession.setActionHandler('play', () => {
       resumeOnVisibleRef.current = true;
-      resumePlayback();
+      onUnlockAudioRef.current?.();
+      audioRef.current?.play().catch(() => {});
     });
     navigator.mediaSession.setActionHandler('pause', () => {
       lastPauseReasonRef.current = 'user';
       resumeOnVisibleRef.current = false;
-      playerRef.current?.pauseVideo();
+      audioRef.current?.pause();
     });
     navigator.mediaSession.setActionHandler('nexttrack', () => onPlayNextRef.current?.());
     navigator.mediaSession.setActionHandler('previoustrack', () => onPlayPrevRef.current?.());
     navigator.mediaSession.setActionHandler('seekto', (details) => {
-      if (details.seekTime && playerRef.current) {
-        playerRef.current.seekTo(details.seekTime, true);
+      if (details.seekTime && audioRef.current) {
+        audioRef.current.currentTime = details.seekTime;
         setCurrentTime(details.seekTime);
       }
     });
-  }, [song, resumePlayback]);
+  }, [song]);
 
-  // ── Sync Media Session state ──────────────────────────────────────────────
+  // ── Sync Media Session playback state ─────────────────────────────────────
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
@@ -197,218 +188,54 @@ const MusicPlayer = ({
     } catch {}
   }, [currentTime, duration]);
 
-  // ── Visibility change — fight browser suspension of YT iframe ───────────
-  // Strategy:
-  //   • When going hidden AND was playing → start a periodic "nudge" that
-  //     calls playVideo() every few seconds to resist browser suspension.
-  //   • When coming back visible → immediately resume + retry on delays.
-  //   • Also listen for window 'focus' for alt-tab / task-switcher returns.
+  // ── Visibility change — re-acquire wake lock on foreground ────────────────
   useEffect(() => {
-    let nudgeTimer = null;
-
-    const startNudge = () => {
-      stopNudge();
-      nudgeTimer = setInterval(() => {
-        if (!playerRef.current) return;
-        try {
-          const state = playerRef.current.getPlayerState?.();
-          // YT.PlayerState.PAUSED = 2, PLAYING = 1
-          if (state === 2 || state === -1) {
-            playerRef.current.playVideo();
-          }
-        } catch { /* ignore */ }
-      }, 8000);
-    };
-
-    const stopNudge = () => {
-      if (nudgeTimer) { clearInterval(nudgeTimer); nudgeTimer = null; }
-    };
-
-    const tryResume = () => {
-      if (!playerRef.current) return;
-      onUnlockAudioRef.current?.();
-      try {
-        const state = playerRef.current.getPlayerState?.();
-        if (state !== 1) { // not already PLAYING
-          playerRef.current.playVideo();
-        }
-      } catch { /* ignore */ }
-      syncPlaybackStateRef.current();
-      requestWakeLock();
-    };
-
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        wasPlayingBeforeHideRef.current = isPlayingRef.current;
-        releaseWakeLock();
-        // Start nudging if user didn't explicitly pause
-        if (isPlayingRef.current && resumeOnVisibleRef.current) {
-          startNudge();
-        }
-      } else {
-        // Came back to foreground
-        stopNudge();
-        if (wasPlayingBeforeHideRef.current && resumeOnVisibleRef.current) {
-          // Aggressive retry ladder: immediate, 300ms, 1s
-          tryResume();
-          setTimeout(tryResume, 300);
-          setTimeout(tryResume, 1000);
-        } else {
-          syncPlaybackStateRef.current();
-        }
+      if (document.visibilityState === 'visible' && isPlayingRef.current) {
+        requestWakeLock();
       }
     };
-
-    const handleFocus = () => {
-      stopNudge();
-      if (wasPlayingBeforeHideRef.current && resumeOnVisibleRef.current) {
-        tryResume();
-        setTimeout(tryResume, 500);
-      }
-    };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
-      stopNudge();
       releaseWakeLock();
     };
   }, [releaseWakeLock, requestWakeLock]);
 
-  // ── Init YouTube player ───────────────────────────────────────────────────
-  // IMPORTANT: dep array is [song?.videoId, autoPlay, initialSeekTime] only.
-  // All callbacks are accessed via stable refs so they never trigger a player
-  // rebuild — this was causing the stop/play oscillation.
-  useEffect(() => {
-    if (!song) return;
-    let destroyed = false;
-
-    loadYTApi().then((YT) => {
-      if (destroyed) return;
-      if (playerRef.current) {
-        try { playerRef.current.destroy(); } catch {}
-        playerRef.current = null;
-      }
-
-      playerRef.current = new YT.Player(playerContainerRef.current, {
-        host: 'https://www.youtube.com',
-        width: '200',
-        height: '200',
-        videoId: song.videoId,
-        playerVars: {
-          enablejsapi: 1,
-          origin: window.location.origin,
-          autoplay: autoPlayRef.current ? 1 : 0,
-          controls: 0,
-          rel: 0,
-          modestbranding: 1,
-          iv_load_policy: 3,
-          fs: 0,
-          disablekb: 1,
-          playsinline: 1,
-        },
-        events: {
-          onReady: (e) => {
-            if (destroyed) return;
-            // Use captured refs — NOT the live props — so this callback
-            // never causes the effect to re-run when props change.
-            if ((initialSeekTimeRef.current || 0) > 0) {
-              try { e.target.seekTo(initialSeekTimeRef.current, true); } catch {}
-            }
-            if (autoPlayRef.current) {
-              onUnlockAudioRef.current?.();
-              e.target.playVideo();
-            }
-            window.setTimeout(() => syncPlaybackStateRef.current(), 300);
-          },
-          onStateChange: (e) => {
-            if (destroyed) return;
-            const S = YT.PlayerState;
-            if (e.data === S.PLAYING) {
-              setIsPlaying(true);
-              startPolling();
-              requestWakeLock();
-              // Report only on genuine YT state changes — NOT on every poll tick.
-              // Polling every 500ms was the source of the API call spam.
-              try {
-                const ct = e.target.getCurrentTime?.() ?? 0;
-                onPlaybackStateChangeRef.current?.({ isPlaying: true, currentTime: ct });
-              } catch {}
-            } else if (e.data === S.PAUSED) {
-              setIsPlaying(false);
-              stopPolling();
-              releaseWakeLock();
-              // Do NOT call onPlaybackStateChange here — doing so updates musicPosition
-              // in AppContext, which flows back as initialSeekTime, which was in the dep
-              // array and caused the player to be destroyed/recreated in an infinite loop.
-              // Position is saved only by the explicit user-pause path in togglePlay.
-            } else if (e.data === S.ENDED) {
-              setIsPlaying(false);
-              stopPolling();
-              releaseWakeLock();
-              onPlayNextRef.current?.();
-            }
-            // S.BUFFERING intentionally ignored — prevents isPlaying flicker during buffer
-          },
-          onError: (e) => {
-            console.warn('YT error:', e?.data, song?.videoId);
-            setIsPlaying(false);
-            stopPolling();
-          },
-        },
-      });
-    });
-
-    return () => {
-      destroyed = true;
-      stopPolling();
-      // Player is NOT destroyed on effect cleanup — it lives in a fixed off-screen
-      // div and must survive route changes. It's only rebuilt when song?.videoId changes.
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  // dep array: ONLY song?.videoId — autoPlay and initialSeekTime are read via
-  // refs so changing them never triggers a player rebuild.
-  }, [song?.videoId]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Cleanup on unmount ────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
-      stopPolling();
       releaseWakeLock();
-      try { playerRef.current?.destroy(); } catch {}
     };
-  }, [releaseWakeLock, stopPolling]);
+  }, [releaseWakeLock]);
 
   // ── Controls ──────────────────────────────────────────────────────────────
   const togglePlay = () => {
-    if (!playerRef.current) return;
+    const audio = audioRef.current;
+    if (!audio) return;
     onUnlockAudioRef.current?.();
     if (isPlayingRef.current) {
       lastPauseReasonRef.current = 'user';
-      resumeOnVisibleRef.current = false;  // don't auto-resume when foregrounded
-      playerRef.current.pauseVideo();
-      // Save position on explicit user pause (safe here — not in the dep loop)
+      resumeOnVisibleRef.current = false;
+      audio.pause();
       try {
-        const ct = playerRef.current.getCurrentTime?.() ?? 0;
-        onPlaybackStateChangeRef.current?.({ isPlaying: false, currentTime: ct });
+        onPlaybackStateChangeRef.current?.({ isPlaying: false, currentTime: audio.currentTime || 0 });
       } catch {}
     } else {
       resumeOnVisibleRef.current = true;
-      resumePlayback();
+      audio.play().catch(() => {});
     }
   };
 
   const seek = useCallback((e) => {
-    if (!playerRef.current || !progressBarRef.current) return;
+    const audio = audioRef.current;
+    if (!audio || !progressBarRef.current) return;
     const rect = progressBarRef.current.getBoundingClientRect();
     const x = (e.clientX ?? e.touches?.[0]?.clientX) - rect.left;
     const pct = Math.max(0, Math.min(1, x / rect.width));
-    const dur = playerRef.current.getDuration?.() ?? 0;
+    const dur = audio.duration || 0;
     const seekTo = pct * dur;
-    playerRef.current.seekTo(seekTo, true);
+    audio.currentTime = seekTo;
     setProgress(pct * 100);
     setCurrentTime(seekTo);
   }, []);
@@ -417,10 +244,22 @@ const MusicPlayer = ({
 
   return (
     <>
-      {/* Off-screen iframe — keeps playback alive across route changes */}
-      <div style={{ position: 'fixed', top: -9999, left: -9999, width: 200, height: 200, opacity: 0, pointerEvents: 'none' }}>
-        <div ref={playerContainerRef} />
-      </div>
+      {/* Hidden audio element — keeps playback alive across route changes */}
+      <audio
+        ref={audioRef}
+        src={song.audioUrl}
+        preload="auto"
+        onTimeUpdate={handleTimeUpdate}
+        onPlay={handlePlay}
+        onPause={handlePause}
+        onEnded={handleEnded}
+        onLoadedMetadata={handleLoadedMetadata}
+        onError={(e) => {
+          console.warn('Audio error:', e?.target?.error, song?.videoId);
+          setIsPlaying(false);
+        }}
+        style={{ display: 'none' }}
+      />
 
       {visible && (
         <motion.div

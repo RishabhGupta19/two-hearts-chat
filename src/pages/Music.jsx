@@ -26,31 +26,52 @@ import {
 import { useApp } from '@/context/AppContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// YouTube Data API v3 search
+// JioSaavn search via saavn.dev API
 // ─────────────────────────────────────────────────────────────────────────────
-const YT_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || '';
+const SAAVN_API_BASE = import.meta.env.VITE_JIOSAAVN_API_URL || 'https://saavn.dev/api';
 
-const searchYouTube = async (query) => {
-  const normalizedKey = (YT_API_KEY || '').trim();
-  if (!normalizedKey || normalizedKey === 'YOUR_YOUTUBE_API_KEY_HERE') {
-    throw new Error('VITE_YOUTUBE_API_KEY is not set');
-  }
-  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=15&q=${encodeURIComponent(query)}&key=${YT_API_KEY}`;
+const searchJioSaavn = async (query) => {
+  const url = `${SAAVN_API_BASE}/search/songs?query=${encodeURIComponent(query)}&limit=15`;
   const res = await fetch(url);
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `YouTube API error ${res.status}`);
+    throw new Error(`JioSaavn API error ${res.status}`);
   }
-  const data = await res.json();
-  return (data.items || []).map((item) => ({
-    videoId: item.id.videoId,
-    title: item.snippet.title,
-    channelTitle: item.snippet.channelTitle,
-    thumbnail:
-      item.snippet.thumbnails?.high?.url ||
-      item.snippet.thumbnails?.medium?.url ||
-      item.snippet.thumbnails?.default?.url,
-  }));
+  const json = await res.json();
+  const results = json?.data?.results || [];
+
+  return results.map((song) => {
+    // Pick best quality audio (320kbps preferred, fallback down)
+    const downloads = song.downloadUrl || [];
+    const audioUrl =
+      downloads[4]?.url ||   // 320kbps
+      downloads[3]?.url ||   // 160kbps
+      downloads[2]?.url ||   // 96kbps
+      downloads[1]?.url ||   // 48kbps
+      downloads[0]?.url ||   // 12kbps
+      '';
+
+    // Pick best quality image
+    const images = song.image || [];
+    const thumbnail =
+      images[2]?.url ||   // 500x500
+      images[1]?.url ||   // 150x150
+      images[0]?.url ||   // 50x50
+      '';
+
+    // Join artist names
+    const artists = (song.artists?.primary || [])
+      .map((a) => a.name)
+      .filter(Boolean)
+      .join(', ') || song.artists?.all?.[0]?.name || '';
+
+    return {
+      videoId: song.id,           // reuse "videoId" key for backend compat
+      title: song.name || '',
+      channelTitle: artists,
+      thumbnail,
+      audioUrl,
+    };
+  });
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -136,7 +157,6 @@ const Music = () => {
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
-  const [apiKeyError, setApiKeyError] = useState(false);
 
   const [library, setLibrary] = useState([]);
   const [libraryLoading, setLibraryLoading] = useState(true);
@@ -169,7 +189,6 @@ const Music = () => {
     if (!q.trim()) {
       setResults([]);
       setSearchError('');
-      setApiKeyError(false);
       return;
     }
 
@@ -179,20 +198,12 @@ const Music = () => {
     setSearching(true);
     setSearchError('');
     try {
-      const hits = await searchYouTube(q);
+      const hits = await searchJioSaavn(q);
       setResults(hits);
       setCachedSearch(q, hits);
     } catch (err) {
-      console.error('YouTube search failed:', err);
-      const msg = err.message || '';
-      if (msg.includes('not set') || msg.includes('not valid') || msg.includes('API key')) {
-        // Key missing or placeholder — show the setup card
-        setApiKeyError(true);
-      } else if (msg.includes('quotaExceeded')) {
-        setSearchError('Daily search limit reached (~100 searches/day). Try again tomorrow or browse your saved library.');
-      } else {
-        setSearchError('Search failed. Please check your internet connection.');
-      }
+      console.error('JioSaavn search failed:', err);
+      setSearchError('Search failed. Please check your internet connection.');
     } finally {
       setSearching(false);
     }
@@ -206,7 +217,6 @@ const Music = () => {
     if (!val.trim()) {
       setResults([]);
       setSearchError('');
-      setApiKeyError(false);
       return;
     }
 
@@ -314,7 +324,6 @@ const Music = () => {
                 setQuery('');
                 setResults([]);
                 setSearchError('');
-                setApiKeyError(false);
                 inputRef.current?.focus();
               }}
               className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
@@ -372,52 +381,8 @@ const Music = () => {
           {tab === 'search' && (
             <motion.div key="search-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
 
-              {/* ── Search unavailable (API key missing/invalid) ───────── */}
-              {apiKeyError && (
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex flex-col items-center text-center py-16 px-6"
-                >
-                  {/* Sad face SVG — no emoji */}
-                  <svg
-                    width="64"
-                    height="64"
-                    viewBox="0 0 64 64"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="mb-5 opacity-40"
-                  >
-                    <circle cx="32" cy="32" r="30" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" />
-                    <circle cx="22" cy="26" r="3" fill="hsl(var(--muted-foreground))" />
-                    <circle cx="42" cy="26" r="3" fill="hsl(var(--muted-foreground))" />
-                    {/* Sad mouth */}
-                    <path
-                      d="M21 44 Q32 36 43 44"
-                      stroke="hsl(var(--muted-foreground))"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      fill="none"
-                    />
-                    {/* Tear drop */}
-                    <path
-                      d="M22 32 Q21 36 23 37 Q25 36 24 32"
-                      fill="hsl(var(--muted-foreground))"
-                      opacity="0.5"
-                    />
-                  </svg>
-
-                  <h3 className="font-heading text-lg font-semibold text-foreground mb-2">
-                    Something went wrong on our side
-                  </h3>
-                  <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
-                    Search is not available right now. Please try again later.
-                  </p>
-                </motion.div>
-              )}
-
               {/* ── Generic search error ───────────────────────────────── */}
-              {searchError && !apiKeyError && (
+              {searchError && (
                 <motion.div
                   initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -450,7 +415,7 @@ const Music = () => {
                 </div>
               )}
 
-              {!searching && !searchError && !apiKeyError && results.length === 0 && !query.trim() && (
+              {!searching && !searchError && results.length === 0 && !query.trim() && (
                 <motion.div
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -484,7 +449,7 @@ const Music = () => {
               )}
 
               {/* ── No results found ─────────────────────────────────────── */}
-              {!searching && !searchError && !apiKeyError && results.length === 0 && query.trim() !== '' && (
+              {!searching && !searchError && results.length === 0 && query.trim() !== '' && (
                 <motion.div
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
