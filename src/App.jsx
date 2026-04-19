@@ -2,13 +2,12 @@ import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
-import { Toaster as Sonner, toast } from "@/components/ui/sonner";
+import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider, useApp } from "@/context/AppContext";
-import MusicPlayer from "@/components/MusicPlayer";
-import useBackgroundAudio from "@/hooks/useBackgroundAudio";
 import MusicPlayer, { loadYTApi } from "@/components/MusicPlayer";
+import useBackgroundAudio from "@/hooks/useBackgroundAudio";
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
 import Assessment from "./pages/Assessment";
@@ -21,18 +20,14 @@ import Gallery from "./pages/Gallery";
 import Music from "./pages/Music";
 import NotFound from "./pages/NotFound";
 import IOSInstallBanner from "@/components/IOSInstallBanner";
-
-
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
 
-
 // Foreground push handling is centralized in AppContext via subscribeToForegroundMessages
 
 const AppRoutes = () => {
-  const { isAuthenticated, userRole, assessmentCompleted,onboardingComplete, nickname, isLinked, loading } = useApp();
-  
+  const { isAuthenticated, userRole, assessmentCompleted, onboardingComplete, nickname, isLinked, loading } = useApp();
 
   if (loading) {
     return (
@@ -68,16 +63,14 @@ const AppRoutes = () => {
     );
   }
 
-
-
-if (!onboardingComplete) {
-  return (
-    <Routes>
-      <Route path="/nickname" element={<NicknameSetup />} />
-      <Route path="*" element={<Navigate to="/nickname" replace />} />
-    </Routes>
-  );
-}
+  if (!onboardingComplete) {
+    return (
+      <Routes>
+        <Route path="/nickname" element={<NicknameSetup />} />
+        <Route path="*" element={<Navigate to="/nickname" replace />} />
+      </Routes>
+    );
+  }
 
   return (
     <Routes>
@@ -94,7 +87,6 @@ if (!onboardingComplete) {
 };
 
 const GlobalMusicPlayer = ({ onUnlockAudio }) => {
-const GlobalMusicPlayer = () => {
   const {
     currentSong,
     currentQueue,
@@ -120,8 +112,6 @@ const GlobalMusicPlayer = () => {
           autoPlay={musicShouldResume || musicWasPlaying}
           initialSeekTime={musicPosition}
           onUnlockAudio={onUnlockAudio}
-          autoPlay={musicWasPlaying}
-          initialSeekTime={musicPosition}
           onPlaybackStateChange={updateMusicPlayback}
           onClose={closeMusicPlayer}
           onPlayNext={currentIndex < currentQueue.length - 1 ? playNextTrack : null}
@@ -131,23 +121,6 @@ const GlobalMusicPlayer = () => {
     </AnimatePresence>
   );
 };
-
-// const App = () => (
-  
-//   <QueryClientProvider client={queryClient}>
-//     <TooltipProvider>
-//       <Toaster />
-//       <Sonner />
-//       <AppProvider>
-//         <BrowserRouter>
-//             <AppRoutes />
-          
-//           <IOSInstallBanner />
-//         </BrowserRouter>
-//       </AppProvider>
-//     </TooltipProvider>
-//   </QueryClientProvider>
-// );
 
 const App = () => {
   const { unlock } = useBackgroundAudio();

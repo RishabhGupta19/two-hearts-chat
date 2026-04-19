@@ -43,8 +43,8 @@ const searchYouTube = async (query) => {
   }
   const data = await res.json();
   return (data.items || []).map((item) => ({
-    videoId:      item.id.videoId,
-    title:        item.snippet.title,
+    videoId: item.id.videoId,
+    title: item.snippet.title,
     channelTitle: item.snippet.channelTitle,
     thumbnail:
       item.snippet.thumbnails?.high?.url ||
@@ -131,20 +131,20 @@ const Music = () => {
   const navigate = useNavigate();
   const { currentSong, startMusicPlayback, closeMusicPlayer } = useApp();
 
-  const [tab, setTab]             = useState('search');
-  const [query, setQuery]         = useState('');
-  const [results, setResults]     = useState([]);
+  const [tab, setTab] = useState('search');
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [apiKeyError, setApiKeyError] = useState(false);
 
-  const [library, setLibrary]         = useState([]);
+  const [library, setLibrary] = useState([]);
   const [libraryLoading, setLibraryLoading] = useState(true);
-  const [libraryError, setLibraryError]   = useState('');
+  const [libraryError, setLibraryError] = useState('');
   // Track per-song loading states
-  const [savingIds, setSavingIds]     = useState(new Set());
+  const [savingIds, setSavingIds] = useState(new Set());
 
-  const inputRef    = useRef(null);
+  const inputRef = useRef(null);
   const debounceRef = useRef(null);
 
   // ── Load library on mount ────────────────────────────────────────────────
@@ -274,9 +274,9 @@ const Music = () => {
       <header
         className="flex items-center justify-between px-5 py-4 flex-shrink-0"
         style={{
-          background:    'rgba(255,255,255,0.6)',
-          backdropFilter:'blur(16px)',
-          borderBottom:  '1px solid rgba(0,0,0,0.06)',
+          background: 'rgba(255,255,255,0.6)',
+          backdropFilter: 'blur(16px)',
+          borderBottom: '1px solid rgba(0,0,0,0.06)',
         }}
       >
         <button
@@ -284,7 +284,7 @@ const Music = () => {
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          <span>Back</span>
+
         </button>
 
         <div className="flex items-center gap-2">
@@ -331,9 +331,9 @@ const Music = () => {
             className="w-full pl-10 pr-10 py-3 rounded-2xl text-sm outline-none transition-all"
             style={{
               background: 'rgba(255,255,255,0.8)',
-              border:     '1px solid rgba(0,0,0,0.08)',
-              boxShadow:  '0 2px 12px rgba(0,0,0,0.06)',
-              color:      'hsl(var(--foreground))',
+              border: '1px solid rgba(0,0,0,0.08)',
+              boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+              color: 'hsl(var(--foreground))',
             }}
           />
         </form>
@@ -342,7 +342,7 @@ const Music = () => {
       {/* ── Tabs ────────────────────────────────────────────────────────── */}
       <div className="flex px-4 gap-2 mb-3 flex-shrink-0">
         {[
-          { key: 'search',  label: 'Search',                    icon: Search      },
+          { key: 'search', label: 'Search', icon: Search },
           { key: 'library', label: `Library (${library.length})`, icon: BookMarked },
         ].map(({ key, label, icon: Icon }) => (
           <button
@@ -492,7 +492,7 @@ const Music = () => {
                 >
                   <Search className="w-10 h-10 mx-auto text-muted-foreground/30 mb-4" />
                   <p className="text-sm text-muted-foreground">
-                    No results found for "{query}". <br/>Try a different search term.
+                    No results found for "{query}". <br />Try a different search term.
                   </p>
                 </motion.div>
               )}

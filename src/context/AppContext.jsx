@@ -5,6 +5,50 @@ import { requestNotificationPermission, subscribeToForegroundMessages } from '@/
 
 const AppContext = createContext(null);
 const MUSIC_STATE_STORAGE_KEY = 'music_player_state_v1';
+const CACHED_USER_KEY = 'cached_user_v1';
+
+// ---------------------------------------------------------------------------
+// Cached user snapshot — lets the app hydrate instantly on PWA resumes
+// without waiting for a network round-trip to /auth/me.
+// ---------------------------------------------------------------------------
+const readCachedUser = () => {
+  try {
+    const raw = localStorage.getItem(CACHED_USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedUser = (user) => {
+  try {
+    // Only store the fields we need for instant hydration — no PII blobs.
+    const snapshot = {
+      id: user.id,
+      name: user.name || '',
+      email: user.email || '',
+      role: user.role || null,
+      nickname: user.nickname || '',
+      onboarding_complete: user.onboarding_complete || false,
+      assessment_completed: user.assessment_completed || false,
+      assessment_profile: user.assessment_profile || null,
+      couple_id: user.couple_id || null,
+      partner_name: user.partner_name || '',
+      is_linked: user.is_linked || false,
+      profile_picture_url: user.profile_picture_url || user.profile_pic_url || null,
+      partner_profile_picture_url: user.partner_profile_picture_url || user.partner_profile_pic_url || null,
+    };
+    localStorage.setItem(CACHED_USER_KEY, JSON.stringify(snapshot));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const clearCachedUser = () => {
+  try { localStorage.removeItem(CACHED_USER_KEY); } catch { /* ignore */ }
+};
 
 const readPersistedMusicState = () => {
   if (typeof localStorage === 'undefined') {
@@ -171,22 +215,57 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
 export const AppProvider = ({ children }) => {
   const [state, setState] = useState(defaultState);
 
-  // On mount, check for existing token and fetch user
+  // -------------------------------------------------------------------------
+  // On mount: optimistically hydrate from the cached user snapshot so the
+  // app is immediately usable (no spinner on PWA resume), then verify with
+  // the backend in the background and refresh state silently.
+  // -------------------------------------------------------------------------
   useEffect(() => {
     const token = localStorage.getItem('access_token');
-    if (token) {
-      // Fetch user and ensure notification permission + token registration
+
+    if (!token) {
+      setState((s) => ({ ...s, loading: false }));
+      return;
+    }
+
+    // Hydrate from cache immediately — removes the full-screen spinner on
+    // every cold start / PWA resume.
+    const cached = readCachedUser();
+    if (cached) {
+      // Apply cached snapshot so the UI renders without waiting on the network.
+      syncUserState(cached);
+      // Then verify in the background; syncUserState will update on success.
+      (async () => {
+        const user = await fetchUser();
+        if (user) {
+          try {
+            requestNotificationPermission(api, user.id);
+          } catch (e) {
+            console.warn('Failed to request notification permission on mount', e);
+          }
+        }
+      })();
+    } else {
+      // No cache — show spinner until network resolves.
       (async () => {
         const user = await fetchUser();
         try {
-          requestNotificationPermission(api, user?.id);
+          if (user) requestNotificationPermission(api, user.id);
         } catch (e) {
           console.warn('Failed to request notification permission on mount', e);
         }
       })();
-    } else {
-      setState((s) => ({ ...s, loading: false }));
     }
+
+    // Listen for forced logout dispatched by the API interceptor when the
+    // refresh token has also expired.
+    const handleForcedLogout = () => {
+      clearCachedUser();
+      localStorage.removeItem('onboarding_complete');
+      setState({ ...defaultState, loading: false });
+    };
+    window.addEventListener('auth:logout', handleForcedLogout);
+    return () => window.removeEventListener('auth:logout', handleForcedLogout);
   }, []);
 
   const syncUserState = (user) => {
@@ -202,6 +281,9 @@ export const AppProvider = ({ children }) => {
     } catch (e) {
       // ignore storage errors
     }
+
+    // Persist a minimal user snapshot for instant hydration on next PWA open.
+    writeCachedUser(user);
 
     setState((s) => ({
       ...s,
@@ -233,10 +315,22 @@ export const AppProvider = ({ children }) => {
       const user = data.user || data;
       syncUserState(user);
       return user;
-    } catch {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      setState((s) => ({ ...s, ...defaultState, loading: false }));
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 401) {
+        // Explicit 401 that the refresh interceptor couldn't recover from —
+        // the session is genuinely expired. Clear everything.
+        clearCachedUser();
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('onboarding_complete');
+        setState((s) => ({ ...s, ...defaultState, loading: false }));
+      } else {
+        // Network error, server error, or offline — don't log the user out.
+        // Just stop showing the loading spinner; cached state stays intact.
+        console.warn('fetchUser failed (non-auth error), keeping existing session:', err?.message || err);
+        setState((s) => ({ ...s, loading: false }));
+      }
     }
   };
 
@@ -257,6 +351,7 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(() => {
+    clearCachedUser();
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('onboarding_complete');
@@ -468,10 +563,13 @@ export const AppProvider = ({ children }) => {
           const options = {
             body,
             icon: '/icon-192.png',
-            badge: '/badge-72.png',
+            // badge-72.png does not exist in public/ — omit to avoid broken resource
             data: payload?.data || {},
             tag: payload?.data?.tag || String(dedupeKey || 'solace-message'),
             renotify: true,
+            requireInteraction: true,
+            silent: false,
+            vibrate: [200, 100, 200],
           };
 
           navigator.serviceWorker.ready.then((registration) => {

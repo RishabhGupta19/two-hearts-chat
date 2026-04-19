@@ -253,22 +253,21 @@ messaging.onBackgroundMessage(async (payload) => {
   // Skip if browser auto-displays (has notification block)
   if (payload?.notification) return;
 
-  // ✅ Use heartbeat flag — more reliable than clients.matchAll on mobile PWA
-  if (appIsActive) return;
-
   // Wait briefly to give any foreground client a chance to report the message as seen
-  const DELAY_MS = 1500;
+  const DELAY_MS = 800;
   const messageId = payload.data?.message_id || payload.data?.messageId || payload.data?.notification_id || null;
+
   if (messageId) {
     await new Promise((r) => setTimeout(r, DELAY_MS));
     if (recentSeen.has(String(messageId))) return;
   } else {
-    // No explicit id in payload: wait and then fall back to client and matchAll checks
+    // No explicit id — only suppress if no app window is open at all
     await new Promise((r) => setTimeout(r, DELAY_MS));
-    if (appIsActive) return;
     try {
       const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-      if (allClients.length > 0) return;
+      // Only skip if ALL clients are visible (user is actively looking at the app)
+      const allVisible = allClients.length > 0 && allClients.every((c) => c.visibilityState === 'visible');
+      if (allVisible && appIsActive) return;
     } catch (e) {
       // ignore matchAll errors
     }
@@ -281,16 +280,21 @@ messaging.onBackgroundMessage(async (payload) => {
     || payload.data?.messageId
     || `${title}::${body}`;
 
-  // Close ALL existing notifications before showing — nuclear dedup
-  const allNotifications = await self.registration.getNotifications();
-  allNotifications.forEach((n) => n.close());
+  // Close existing notifications with same tag before showing new one
+  try {
+    const existing = await self.registration.getNotifications({ tag: String(tag) });
+    existing.forEach((n) => n.close());
+  } catch (e) { /* ignore */ }
 
   await self.registration.showNotification(title, {
     body,
     icon: '/icon-192.png',
-    badge: '/badge-72.png',
+    // badge omitted — badge-72.png doesn't exist in public/
     tag: String(tag),
-    renotify: false,
+    renotify: true,
+    requireInteraction: true,
+    silent: false,
+    vibrate: [200, 100, 200],
     data: {
       url: payload.data?.url || '/#/chat',
       ...(payload.data || {}),

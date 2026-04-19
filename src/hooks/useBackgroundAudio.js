@@ -14,6 +14,19 @@ const useBackgroundAudio = () => {
     silentAudioRef.current = audio;
   }, []);
 
+  // Re-play the silent track when the PWA comes back to foreground.
+  // iOS/Android suspend the audio context when the app is backgrounded —
+  // resuming the silent track re-activates it so YT playback keeps working.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && silentAudioRef.current) {
+        silentAudioRef.current.play().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   useEffect(() => {
     document.addEventListener('pointerdown', unlock, { once: true });
     document.addEventListener('touchstart', unlock, { once: true });
