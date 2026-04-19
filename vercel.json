@@ -14,9 +14,10 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "script-src 'self' 'wasm-unsafe-eval' 'inline-speculation-rules' blob: 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline' fonts.googleapis.com; img-src 'self' data: https: blob:; media-src 'self' https: blob: data:; connect-src 'self' https://solace-nam6.onrender.com wss://solace-nam6.onrender.com https://jiosaavn-api.rishabh134we.workers.dev https://*.saavncdn.com https://*.jiosaavn.com;"
+          "value": "script-src 'self' 'wasm-unsafe-eval' 'inline-speculation-rules' blob: 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; media-src 'self' https: blob: data:; connect-src 'self' https://solace-nam6.onrender.com wss://solace-nam6.onrender.com https://jiosaavn-api.rishabh134we.workers.dev https://*.saavncdn.com https://*.jiosaavn.com https://*.googleapis.com https://*.firebaseio.com https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com https://res.cloudinary.com;"
         }
       ]
     }
   ]
 }
+
