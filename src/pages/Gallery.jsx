@@ -123,6 +123,28 @@ const Gallery = () => {
         <div className="w-16" />
       </header>
 
+      {/* Upload overlay */}
+      <AnimatePresence>
+        {uploading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-card rounded-2xl px-8 py-6 flex flex-col items-center gap-3 shadow-2xl"
+            >
+              <Loader2 className="w-10 h-10 animate-spin text-primary" />
+              <p className="text-sm font-medium text-foreground">Uploading photo…</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto px-6 py-8">
         <div className="max-w-4xl mx-auto">

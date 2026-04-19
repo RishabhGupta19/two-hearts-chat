@@ -257,6 +257,19 @@ export const AppProvider = ({ children }) => {
       })();
     }
 
+    // Safety net: if loading is still true after 5 seconds (e.g. network
+    // hang, firebase crash, unhandled rejection), force it off so the user
+    // isn't stuck on a blank screen forever.
+    const safetyTimer = setTimeout(() => {
+      setState((s) => {
+        if (s.loading) {
+          console.warn('Safety timeout: forcing loading=false after 5s');
+          return { ...s, loading: false };
+        }
+        return s;
+      });
+    }, 5000);
+
     // Listen for forced logout dispatched by the API interceptor when the
     // refresh token has also expired.
     const handleForcedLogout = () => {
@@ -265,7 +278,10 @@ export const AppProvider = ({ children }) => {
       setState({ ...defaultState, loading: false });
     };
     window.addEventListener('auth:logout', handleForcedLogout);
-    return () => window.removeEventListener('auth:logout', handleForcedLogout);
+    return () => {
+      clearTimeout(safetyTimer);
+      window.removeEventListener('auth:logout', handleForcedLogout);
+    };
   }, []);
 
   const syncUserState = (user) => {
