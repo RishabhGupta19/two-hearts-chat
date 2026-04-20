@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
@@ -7,6 +7,26 @@ import { ArrowLeft, Plus, Loader2, ImagePlus } from 'lucide-react';
 import { toast } from 'sonner';
 import PhotoTile from '@/components/PhotoTile';
 import LightboxWithNote from '@/components/LightboxWithNote';
+
+// ── Gallery cache (instant load on revisit) ─────────────────────────────────
+const GALLERY_CACHE_KEY = 'gallery_photos_cache_v1';
+const CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
+
+const readGalleryCache = () => {
+  try {
+    const raw = localStorage.getItem(GALLERY_CACHE_KEY);
+    if (!raw) return null;
+    const { photos, ts } = JSON.parse(raw);
+    if (!Array.isArray(photos)) return null;
+    return { photos, stale: Date.now() - ts > CACHE_MAX_AGE_MS };
+  } catch { return null; }
+};
+
+const writeGalleryCache = (photos) => {
+  try {
+    localStorage.setItem(GALLERY_CACHE_KEY, JSON.stringify({ photos, ts: Date.now() }));
+  } catch { /* ignore quota errors */ }
+};
 
 const Gallery = () => {
   const navigate = useNavigate();
@@ -28,31 +48,40 @@ const Gallery = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [navigate]);
 
-  const [photos, setPhotos] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [photos, setPhotos] = useState(() => {
+    // Instant hydration from cache
+    const cached = readGalleryCache();
+    return cached?.photos || [];
+  });
+  const [loading, setLoading] = useState(() => !readGalleryCache());
   const [uploading, setUploading] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [showLightbox, setShowLightbox] = useState(false);
 
-  // Fetch photos on load
-  useEffect(() => {
-    fetchPhotos();
-  }, [coupleId]);
-
-  const fetchPhotos = async () => {
+  // Fetch photos (stale-while-revalidate: show cache, refresh in bg)
+  const fetchPhotos = useCallback(async (showSpinner = false) => {
     if (!coupleId) return;
 
     try {
-      setLoading(true);
+      if (showSpinner) setLoading(true);
       const { data } = await api.get('/gallery/photos');
-      setPhotos(data.photos || []);
+      const freshPhotos = data.photos || [];
+      setPhotos(freshPhotos);
+      writeGalleryCache(freshPhotos);
     } catch (err) {
       console.error('Failed to fetch photos:', err);
-      toast.error('Failed to load photos');
+      // Only toast if we have no cached data to show
+      if (!photos.length) toast.error('Failed to load photos');
     } finally {
       setLoading(false);
     }
-  };
+  }, [coupleId]);
+
+  // Fetch on mount — if we have cached data, skip the spinner
+  useEffect(() => {
+    const cached = readGalleryCache();
+    fetchPhotos(!cached?.photos?.length);
+  }, [fetchPhotos]);
 
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
@@ -83,7 +112,7 @@ const Gallery = () => {
       });
 
       toast.success('Photo uploaded! 📸');
-      await fetchPhotos();
+      await fetchPhotos(false);
     } catch (err) {
       console.error('Upload failed:', err);
       toast.error(err?.response?.data?.error || err.message || 'Failed to upload photo');
@@ -97,12 +126,18 @@ const Gallery = () => {
 
     try {
       setUploading(true);
+      // Optimistic removal from UI + cache
+      setPhotos((prev) => {
+        const next = prev.filter((p) => p.id !== photo.id);
+        writeGalleryCache(next);
+        return next;
+      });
       await api.delete(`/gallery/photos/${photo.id}`);
       toast.success('Image deleted');
-      await fetchPhotos();
     } catch (err) {
       console.error('Delete failed:', err);
       toast.error('Failed to delete image');
+      await fetchPhotos(false);
     } finally {
       setUploading(false);
     }

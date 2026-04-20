@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Pause, X, ChevronDown, ChevronUp, SkipBack, SkipForward } from 'lucide-react';
+import { getAudioStream } from '@/services/AudioService';
 
 // ── MusicPlayer component ─────────────────────────────────────────────────────
 // Uses a native <audio> element with direct MP3 URLs from JioSaavn.
@@ -20,6 +21,7 @@ const MusicPlayer = ({
   const audioRef = useRef(null);
   const wakeLockRef = useRef(null);
   const progressIntervalRef = useRef(null);
+  const isTransitioningRef = useRef(false);
 
   const lastPauseReasonRef = useRef(null);
   const resumeOnVisibleRef = useRef(true);
@@ -47,6 +49,8 @@ const MusicPlayer = ({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
+  const [resolvedUrl, setResolvedUrl] = useState(null);
+  const streamRetryRef = useRef(0);
   const progressBarRef = useRef(null);
 
   const isPlayingRef = useRef(false);
@@ -84,24 +88,41 @@ const MusicPlayer = ({
     if (dur > 0) setProgress((ct / dur) * 100);
   }, []);
 
+  // Helper: forcefully assert our Media Session as the active one so the OS
+  // doesn't hand audio focus (and earbud controls) to Spotify / YT Music.
+  const assertMediaSession = useCallback(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = 'playing';
+  }, []);
+
   const handlePlay = useCallback(() => {
     setIsPlaying(true);
     requestWakeLock();
+    assertMediaSession(); // reclaim audio focus from other apps
     const audio = audioRef.current;
     if (audio) {
       onPlaybackStateChangeRef.current?.({ isPlaying: true, currentTime: audio.currentTime || 0 });
     }
-  }, [requestWakeLock]);
+  }, [requestWakeLock, assertMediaSession]);
 
   const handlePause = useCallback(() => {
+    // During track transitions, don't signal pause to avoid OS dismissing notification
+    if (isTransitioningRef.current) return;
     setIsPlaying(false);
     releaseWakeLock();
   }, [releaseWakeLock]);
 
   const handleEnded = useCallback(() => {
-    setIsPlaying(false);
-    releaseWakeLock();
-    onPlayNextRef.current?.();
+    const hasNext = !!onPlayNextRef.current;
+    if (hasNext) {
+      // Mark as transitioning — keeps media session alive between tracks
+      isTransitioningRef.current = true;
+      onPlayNextRef.current?.();
+    } else {
+      // No next track — genuinely stop
+      setIsPlaying(false);
+      releaseWakeLock();
+    }
   }, [releaseWakeLock]);
 
   const handleLoadedMetadata = useCallback(() => {
@@ -112,34 +133,71 @@ const MusicPlayer = ({
     if ((initialSeekTimeRef.current || 0) > 0) {
       audio.currentTime = initialSeekTimeRef.current;
     }
-    // Auto-play if requested
-    if (autoPlayRef.current) {
+    // Auto-play if requested or if transitioning between tracks
+    if (autoPlayRef.current || isTransitioningRef.current) {
       onUnlockAudioRef.current?.();
-      audio.play().catch(() => {});
+      audio.play().then(() => {
+        // Clear the transition flag once the new track starts playing
+        isTransitioningRef.current = false;
+      }).catch(() => {
+        isTransitioningRef.current = false;
+      });
+    } else {
+      isTransitioningRef.current = false;
     }
   }, []);
 
-  // ── Set up audio element when song changes ────────────────────────────────
+  // ── Resolve audio URL via AudioService when song changes ──────────────────
   useEffect(() => {
-    if (!song?.audioUrl) return;
+    if (!song) return;
+    let cancelled = false;
+    streamRetryRef.current = 0;
+
+    const resolve = async () => {
+      try {
+        // getAudioStream handles provider fallback + caching
+        const url = await getAudioStream(song);
+        if (!cancelled) setResolvedUrl(url);
+      } catch (err) {
+        console.warn('AudioService: stream resolution failed, using song.audioUrl', err);
+        // Fallback to whatever audioUrl the song already has
+        if (!cancelled && song.audioUrl) setResolvedUrl(song.audioUrl);
+      }
+    };
+
+    resolve();
+    return () => { cancelled = true; };
+  }, [song?.videoId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Set up audio element when resolved URL changes ────────────────────────
+  useEffect(() => {
+    if (!resolvedUrl) return;
     const audio = audioRef.current;
     if (!audio) return;
 
-    // Reset state
+    // Reset progress state but preserve isPlaying during transitions
+    // so the OS doesn't dismiss the notification
     setProgress(0);
     setCurrentTime(0);
     setDuration(0);
-    setIsPlaying(false);
+    if (!isTransitioningRef.current) {
+      setIsPlaying(false);
+    }
 
     // The src is set via JSX, but we need to load the new source
     audio.load();
 
     return () => {
-      releaseWakeLock();
+      if (!isTransitioningRef.current) {
+        releaseWakeLock();
+      }
     };
-  }, [song?.audioUrl, song?.videoId, releaseWakeLock]);
+  }, [resolvedUrl, releaseWakeLock]);
 
   // ── Media Session API (lock screen / notification shade controls) ─────────
+  // Re-register on song AND isPlaying changes — this prevents other apps
+  // from stealing the hardware media button handlers every time play state
+  // toggles.
   useEffect(() => {
     if (!('mediaSession' in navigator) || !song) return;
     navigator.mediaSession.metadata = new MediaMetadata({
@@ -155,25 +213,40 @@ const MusicPlayer = ({
       resumeOnVisibleRef.current = true;
       onUnlockAudioRef.current?.();
       audioRef.current?.play().catch(() => {});
+      navigator.mediaSession.playbackState = 'playing';
     });
     navigator.mediaSession.setActionHandler('pause', () => {
       lastPauseReasonRef.current = 'user';
       resumeOnVisibleRef.current = false;
       audioRef.current?.pause();
+      navigator.mediaSession.playbackState = 'paused';
     });
     navigator.mediaSession.setActionHandler('nexttrack', () => onPlayNextRef.current?.());
     navigator.mediaSession.setActionHandler('previoustrack', () => onPlayPrevRef.current?.());
     navigator.mediaSession.setActionHandler('seekto', (details) => {
-      if (details.seekTime && audioRef.current) {
+      if (details.seekTime != null && audioRef.current) {
         audioRef.current.currentTime = details.seekTime;
         setCurrentTime(details.seekTime);
       }
     });
-  }, [song]);
+    // Stop handler — explicitly tells OS our session is active and managed
+    navigator.mediaSession.setActionHandler('stop', () => {
+      audioRef.current?.pause();
+      setIsPlaying(false);
+      navigator.mediaSession.playbackState = 'paused';
+    });
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+  }, [song, isPlaying]);
 
   // ── Sync Media Session playback state ─────────────────────────────────────
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
+    // During track transitions, keep reporting 'playing' so the OS doesn't
+    // dismiss the notification / lock-screen controls.
+    if (isTransitioningRef.current) {
+      navigator.mediaSession.playbackState = 'playing';
+      return;
+    }
     navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
   }, [isPlaying]);
 
@@ -224,6 +297,7 @@ const MusicPlayer = ({
     } else {
       resumeOnVisibleRef.current = true;
       audio.play().catch(() => {});
+      assertMediaSession(); // reclaim audio focus from other apps
     }
   };
 
@@ -247,15 +321,26 @@ const MusicPlayer = ({
       {/* Hidden audio element — keeps playback alive across route changes */}
       <audio
         ref={audioRef}
-        src={song.audioUrl}
+        src={resolvedUrl || song.audioUrl}
         preload="auto"
         onTimeUpdate={handleTimeUpdate}
         onPlay={handlePlay}
         onPause={handlePause}
         onEnded={handleEnded}
         onLoadedMetadata={handleLoadedMetadata}
-        onError={(e) => {
+        onError={async (e) => {
           console.warn('Audio error:', e?.target?.error, song?.videoId);
+          // Try re-resolving the stream URL (e.g. expired CDN link)
+          if (streamRetryRef.current < 2) {
+            streamRetryRef.current += 1;
+            try {
+              const freshUrl = await getAudioStream({ ...song, audioUrl: '' });
+              if (freshUrl && freshUrl !== resolvedUrl) {
+                setResolvedUrl(freshUrl);
+                return; // will trigger re-load via the resolvedUrl effect
+              }
+            } catch {}
+          }
           setIsPlaying(false);
         }}
         style={{ display: 'none' }}

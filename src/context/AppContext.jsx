@@ -65,7 +65,10 @@ const readPersistedMusicState = () => {
       currentSong: parsed.currentSong || null,
       currentQueue: Array.isArray(parsed.currentQueue) ? parsed.currentQueue : [],
       currentIndex: Number.isFinite(parsed.currentIndex) ? parsed.currentIndex : 0,
-      musicWasPlaying: Boolean(parsed.musicWasPlaying),
+      // Never auto-play on cold start — the user should tap play explicitly
+      // after reopening the app.  musicWasPlaying is only meaningful during
+      // the current session (e.g. route navigation).
+      musicWasPlaying: false,
       musicPosition: Number.isFinite(parsed.musicPosition) ? parsed.musicPosition : 0,
     };
   } catch {
@@ -911,7 +914,9 @@ export const AppProvider = ({ children }) => {
           currentSong: state.currentSong,
           currentQueue: state.currentQueue,
           currentIndex: state.currentIndex,
-          musicWasPlaying: state.musicWasPlaying,
+          // Always persist as false — music should never auto-play on cold
+          // start.  Playback resumes only via explicit user action.
+          musicWasPlaying: false,
           musicPosition: state.musicPosition,
         })
       );

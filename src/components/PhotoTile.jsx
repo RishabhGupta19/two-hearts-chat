@@ -1,71 +1,75 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 
-// Extract dominant color from image using canvas
-const getDominantColor = (imageUrl, callback) => {
-  const img = new Image();
-  img.crossOrigin = 'Anonymous';
-  
-  img.onload = () => {
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 100;
-      canvas.height = 100;
-      const ctx = canvas.getContext('2d');
-      
-      // Draw image on canvas
-      ctx.drawImage(img, 0, 0, 100, 100);
-      
-      // Get pixel data from center region (40x40 area in middle)
-      const imageData = ctx.getImageData(30, 30, 40, 40);
-      const data = imageData.data;
-      
-      let r = 0, g = 0, b = 0;
-      const pixelCount = data.length / 4;
-      
-      // Sample every 4th pixel to get average color
-      for (let i = 0; i < data.length; i += 16) {
-        r += data[i];
-        g += data[i + 1];
-        b += data[i + 2];
-      }
-      
-      // Calculate average
-      const sampleCount = pixelCount / 4;
-      r = Math.round(r / sampleCount);
-      g = Math.round(g / sampleCount);
-      b = Math.round(b / sampleCount);
-      
-      callback(`rgb(${r}, ${g}, ${b})`);
-    } catch (err) {
-      console.error('Error sampling color:', err);
-      // Fallback color
-      callback('rgb(168, 85, 247)'); // purple
-    }
-  };
-  
-  img.onerror = () => {
-    console.error('Failed to load image for color sampling');
-    callback('rgb(168, 85, 247)'); // fallback purple
-  };
-  
-  img.src = imageUrl;
+// ── Cloudinary URL transforms ─────────────────────────────────────────────────
+// Inject transformation params into Cloudinary URLs for optimized delivery.
+// e.g. .../upload/v123/photo.jpg → .../upload/f_auto,q_auto,w_300/v123/photo.jpg
+const cloudinaryThumb = (url, width = 300) => {
+  if (!url) return url;
+  try {
+    return url.replace(
+      /\/upload\/(?:v\d+\/)?/,
+      (match) => `/upload/f_auto,q_auto,w_${width},c_fill/${match.replace('/upload/', '')}`
+    );
+  } catch {
+    return url;
+  }
 };
 
-export default function PhotoTile({ photo, onClick }) {
-  const [borderColor, setBorderColor] = useState('rgb(168, 85, 247)'); // default purple
-  const [isLoading, setIsLoading] = useState(true);
+// ── Dominant color cache (avoids re-computing on every render) ─────────────────
+const colorCache = new Map();
 
-  useEffect(() => {
-    if (photo && photo.image_url) {
-      getDominantColor(photo.image_url, (color) => {
-        setBorderColor(color);
-        setIsLoading(false);
-      });
+const extractDominantColor = (imgElement, imageUrl) => {
+  if (colorCache.has(imageUrl)) return colorCache.get(imageUrl);
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 50;
+    canvas.height = 50;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(imgElement, 0, 0, 50, 50);
+    const data = ctx.getImageData(10, 10, 30, 30).data;
+
+    let r = 0, g = 0, b = 0, count = 0;
+    for (let i = 0; i < data.length; i += 16) {
+      r += data[i];
+      g += data[i + 1];
+      b += data[i + 2];
+      count++;
     }
-  }, [photo]);
+
+    r = Math.round(r / count);
+    g = Math.round(g / count);
+    b = Math.round(b / count);
+
+    const color = `rgb(${r}, ${g}, ${b})`;
+    colorCache.set(imageUrl, color);
+    return color;
+  } catch {
+    return 'rgb(168, 85, 247)';
+  }
+};
+
+// ── PhotoTile ─────────────────────────────────────────────────────────────────
+export default function PhotoTile({ photo, onClick }) {
+  const [borderColor, setBorderColor] = useState(
+    () => colorCache.get(photo?.image_url) || 'rgb(168, 85, 247)'
+  );
+  const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef(null);
+
+  const handleImageLoad = useCallback(() => {
+    setLoaded(true);
+    if (imgRef.current && photo?.image_url) {
+      const color = extractDominantColor(imgRef.current, photo.image_url);
+      setBorderColor(color);
+    }
+  }, [photo?.image_url]);
 
   if (!photo) return null;
+
+  // Use optimized thumbnail URL for the grid
+  const thumbUrl = cloudinaryThumb(photo.image_url, 300);
 
   return (
     <motion.div
@@ -79,16 +83,30 @@ export default function PhotoTile({ photo, onClick }) {
         style={{
           border: `3px solid ${borderColor}`,
           boxShadow: `0 0 8px ${borderColor}80, ${borderColor === 'rgb(168, 85, 247)' ? '' : '0 4px 12px rgba(0, 0, 0, 0.15)'}`,
+          background: 'hsl(var(--muted))',
         }}
       >
+        {/* Blurred low-res placeholder */}
+        {!loaded && (
+          <div
+            className="absolute inset-0 animate-pulse"
+            style={{ background: 'hsl(var(--muted))' }}
+          />
+        )}
         <img
-          src={photo.image_url}
+          ref={imgRef}
+          src={thumbUrl}
           alt="Gallery"
-          className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-          onLoad={() => setIsLoading(false)}
+          loading="lazy"
+          decoding="async"
+          crossOrigin="anonymous"
+          className={`w-full h-full object-cover transition-all duration-300 ${
+            loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+          }`}
+          style={{ transition: 'opacity 0.3s ease, transform 0.3s ease' }}
+          onLoad={handleImageLoad}
         />
       </div>
     </motion.div>
   );
 }
-

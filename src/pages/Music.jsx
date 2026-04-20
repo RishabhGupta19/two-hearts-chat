@@ -24,55 +24,7 @@ import {
   setCachedSearch,
 } from '@/utils/musicLibrary';
 import { useApp } from '@/context/AppContext';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// JioSaavn search via saavn.dev API
-// ─────────────────────────────────────────────────────────────────────────────
-const SAAVN_API_BASE = import.meta.env.VITE_JIOSAAVN_API_URL || 'https://saavn.dev/api';
-
-const searchJioSaavn = async (query) => {
-  const url = `${SAAVN_API_BASE}/search/songs?query=${encodeURIComponent(query)}&limit=15`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`JioSaavn API error ${res.status}`);
-  }
-  const json = await res.json();
-  const results = json?.data?.results || [];
-
-  return results.map((song) => {
-    // Pick best quality audio (320kbps preferred, fallback down)
-    const downloads = song.downloadUrl || [];
-    const audioUrl =
-      downloads[4]?.url ||   // 320kbps
-      downloads[3]?.url ||   // 160kbps
-      downloads[2]?.url ||   // 96kbps
-      downloads[1]?.url ||   // 48kbps
-      downloads[0]?.url ||   // 12kbps
-      '';
-
-    // Pick best quality image
-    const images = song.image || [];
-    const thumbnail =
-      images[2]?.url ||   // 500x500
-      images[1]?.url ||   // 150x150
-      images[0]?.url ||   // 50x50
-      '';
-
-    // Join artist names
-    const artists = (song.artists?.primary || [])
-      .map((a) => a.name)
-      .filter(Boolean)
-      .join(', ') || song.artists?.all?.[0]?.name || '';
-
-    return {
-      videoId: song.id,           // reuse "videoId" key for backend compat
-      title: song.name || '',
-      channelTitle: artists,
-      thumbnail,
-      audioUrl,
-    };
-  });
-};
+import { search as audioServiceSearch } from '@/services/AudioService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SongCard
@@ -232,11 +184,11 @@ const Music = () => {
     setSearching(true);
     setSearchError('');
     try {
-      const hits = await searchJioSaavn(q);
+      const hits = await audioServiceSearch(q);
       setResults(hits);
       setCachedSearch(q, hits);
     } catch (err) {
-      console.error('JioSaavn search failed:', err);
+      console.error('Music search failed:', err);
       setSearchError('Search failed. Please check your internet connection.');
     } finally {
       setSearching(false);
