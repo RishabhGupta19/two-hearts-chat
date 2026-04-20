@@ -1,44 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { motion } from 'framer-motion';
 import { X, Edit3, Save, Trash2, Loader2 } from 'lucide-react';
 import api from '@/api';
 import { toast } from 'sonner';
 
-// Extract dominant color from image (same as PhotoTile)
-const getDominantColor = (imageUrl, callback) => {
-  const img = new Image();
-  img.crossOrigin = 'Anonymous';
-  
-  img.onload = () => {
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 100;
-      canvas.height = 100;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, 100, 100);
-      const imageData = ctx.getImageData(30, 30, 40, 40);
-      const data = imageData.data;
-      
-      let r = 0, g = 0, b = 0;
-      const pixelCount = data.length / 4;
-      for (let i = 0; i < data.length; i += 16) {
-        r += data[i];
-        g += data[i + 1];
-        b += data[i + 2];
-      }
-      
-      const sampleCount = pixelCount / 4;
-      r = Math.round(r / sampleCount);
-      g = Math.round(g / sampleCount);
-      b = Math.round(b / sampleCount);
-      callback(`rgb(${r}, ${g}, ${b})`);
-    } catch (err) {
-      callback('rgb(168, 85, 247)');
+// Extract dominant color from an already-loaded img element (no extra network request)
+const extractColor = (imgEl) => {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 50;
+    canvas.height = 50;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(imgEl, 0, 0, 50, 50);
+    const data = ctx.getImageData(10, 10, 30, 30).data;
+    let r = 0, g = 0, b = 0, count = 0;
+    for (let i = 0; i < data.length; i += 16) {
+      r += data[i]; g += data[i + 1]; b += data[i + 2]; count++;
     }
-  };
-  img.onerror = () => callback('rgb(168, 85, 247)');
-  img.src = imageUrl;
+    return `rgb(${Math.round(r / count)}, ${Math.round(g / count)}, ${Math.round(b / count)})`;
+  } catch {
+    return 'rgb(168, 85, 247)';
+  }
 };
 
 export default function LightboxWithNote({ photo, onClose, onNoteUpdate, currentUserId }) {
@@ -50,11 +33,8 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isPhotoOwner = currentUserId && photo.uploaded_by === currentUserId;
 
-  useEffect(() => {
-    if (photo && photo.image_url) {
-      getDominantColor(photo.image_url, setBorderColor);
-    }
-  }, [photo]);
+  // Color will be extracted from the img's onLoad event below — no separate
+  // Image() load needed.
 
   const handleSaveNote = async () => {
     try {
@@ -229,10 +209,12 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
                 <img
                   src={photo.image_url}
                   alt="Photo"
+                  crossOrigin="anonymous"
                   className="max-w-full max-h-full object-contain rounded-lg"
                   style={{
                     border: `2px solid ${borderColor}`,
                   }}
+                  onLoad={(e) => setBorderColor(extractColor(e.currentTarget))}
                 />
               </div>
             </div>
