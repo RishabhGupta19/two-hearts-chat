@@ -16,13 +16,22 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Auto-refresh on 401
+// Auto-refresh on 401 **or** 403.
+// DRF returns 403 (not 401) when no Bearer token is sent at all, because
+// MongoJWTAuthentication.authenticate() returns None for missing headers and
+// then IsAuthenticated denies the anonymous user with 403.  We treat both
+// statuses the same: attempt a token refresh, and if that fails force logout.
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
     const originalRequest = err.config;
-    const isAuthRoute = originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/register');
-    if (err.response?.status === 401 && !originalRequest._retry && !isAuthRoute) {
+    const status = err.response?.status;
+    const isAuthRoute =
+      originalRequest.url?.includes('/auth/login') ||
+      originalRequest.url?.includes('/auth/register') ||
+      originalRequest.url?.includes('/auth/refresh');
+
+    if ((status === 401 || status === 403) && !originalRequest._retry && !isAuthRoute) {
       originalRequest._retry = true;
       try {
         const refresh = localStorage.getItem('refresh_token');

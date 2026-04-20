@@ -333,9 +333,9 @@ export const AppProvider = ({ children }) => {
       return user;
     } catch (err) {
       const status = err?.response?.status;
-      if (status === 401) {
-        // Explicit 401 that the refresh interceptor couldn't recover from —
-        // the session is genuinely expired. Clear everything.
+      if (status === 401 || status === 403) {
+        // Explicit 401/403 that the refresh interceptor couldn't recover from
+        // — the session is genuinely expired. Clear everything.
         clearCachedUser();
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
