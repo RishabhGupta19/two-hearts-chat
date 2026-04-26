@@ -142,12 +142,31 @@ const mergeUniqueById = (existing, incoming) => {
   return sortMessagesAsc(out);
 };
 
+// Strip raw Fernet ciphertext that may leak through if the backend key is
+// unavailable locally or a stale cache entry slips through. Returns a readable
+// placeholder so the UI never renders raw base64 tokens.
+const stripEncryptedText = (value) => {
+  if (typeof value === 'string' && value.startsWith('enc:')) {
+    return '🔒 Message could not be decrypted';
+  }
+  return value;
+};
+
 const readRecentCache = (mode) => {
   try {
     const raw = localStorage.getItem(`chat_recent_${mode}`);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+
+    const hasEncryptedPayload = parsed.some((message) => {
+      const values = [message?.text, message?.reply_to?.text, message?.replyTo?.text];
+      return values.some((value) => typeof value === 'string' && value.startsWith('enc:'));
+    });
+
+    // Old cached windows from before encryption/decryption was normalized can
+    // replay ciphertext into the UI. Drop those stale snapshots and refetch.
+    return hasEncryptedPayload ? [] : parsed;
   } catch {
     return [];
   }
@@ -155,7 +174,13 @@ const readRecentCache = (mode) => {
 
 const writeRecentCache = (mode, messages) => {
   try {
-    localStorage.setItem(`chat_recent_${mode}`, JSON.stringify((messages || []).slice(-40)));
+    // Never persist raw ciphertext — filter any enc: blobs before writing so a
+    // single bad API response can't poison future cache reads.
+    const safe = (messages || []).filter((m) => {
+      const values = [m?.text, m?.reply_to?.text, m?.replyTo?.text];
+      return !values.some((v) => typeof v === 'string' && v.startsWith('enc:'));
+    });
+    localStorage.setItem(`chat_recent_${mode}`, JSON.stringify(safe.slice(-40)));
   } catch {
     // ignore storage errors
   }
@@ -167,9 +192,16 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
   const isOwnedByCurrentUser = currentUserId && senderId
     ? String(senderId) === String(currentUserId)
     : null;
-  const replyTo = message?.replyTo || (message?.reply_to?.id && message?.reply_to?.text
+
+  // Sanitise text fields — strip raw ciphertext that can leak through when the
+  // local backend key is mismatched or a stale cache entry is replayed.
+  const safeText = stripEncryptedText(message?.text ?? '');
+  const replyToRaw = message?.replyTo || (message?.reply_to?.id && message?.reply_to?.text
     ? { messageId: message.reply_to.id, text: message.reply_to.text }
     : null);
+  const replyTo = replyToRaw
+    ? { ...replyToRaw, text: stripEncryptedText(replyToRaw.text ?? '') }
+    : null;
 
   if (mode === 'calm') {
     const isMine = hasExplicitOwnership
@@ -183,6 +215,7 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
 
     return {
       ...message,
+      text: safeText,
       replyTo,
       is_deleted: Boolean(message?.is_deleted),
       isMine,
@@ -208,6 +241,7 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
 
   return {
     ...message,
+    text: safeText,
     replyTo,
     is_deleted: Boolean(message?.is_deleted),
     isMine,
@@ -674,7 +708,13 @@ export const AppProvider = ({ children }) => {
       if (incomingId) {
         const byId = next.findIndex((m) => String(m?.id || '') === incomingId);
         if (byId !== -1) {
-          next[byId] = { ...next[byId], ...normalized, pending: false };
+          // Preserve the trusted isMine from the existing entry — the echo's
+          // freshly computed isMine can be wrong if s.user is stale at this
+          // instant, which causes 1-2 messages to flip sides.
+          const trustedIsMine = typeof next[byId]?.isMine === 'boolean'
+            ? next[byId].isMine
+            : normalized.isMine;
+          next[byId] = { ...next[byId], ...normalized, isMine: trustedIsMine, sender: trustedIsMine ? 'user' : 'partner', pending: false };
           return { ...s, messages: next };
         }
       }
@@ -685,9 +725,15 @@ export const AppProvider = ({ children }) => {
         );
         if (byTemp !== -1) {
           const stableLocalKey = next[byTemp]?.local_key || incomingTempId;
+          // Same: trust the isMine we set when the message was created optimistically.
+          const trustedIsMine = typeof next[byTemp]?.isMine === 'boolean'
+            ? next[byTemp].isMine
+            : normalized.isMine;
           next[byTemp] = {
             ...next[byTemp],
             ...normalized,
+            isMine: trustedIsMine,
+            sender: trustedIsMine ? 'user' : 'partner',
             local_key: stableLocalKey,
             pending: false,
           };
@@ -705,9 +751,14 @@ export const AppProvider = ({ children }) => {
 
         if (pendingIdx !== undefined) {
           const stableLocalKey = next[pendingIdx]?.local_key || next[pendingIdx]?.client_temp_id || next[pendingIdx]?.id;
+          const trustedIsMine = typeof next[pendingIdx]?.isMine === 'boolean'
+            ? next[pendingIdx].isMine
+            : normalized.isMine;
           next[pendingIdx] = {
             ...next[pendingIdx],
             ...normalized,
+            isMine: trustedIsMine,
+            sender: trustedIsMine ? 'user' : 'partner',
             local_key: stableLocalKey,
             pending: false,
           };
