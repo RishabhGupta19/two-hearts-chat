@@ -12,6 +12,8 @@ const MusicPlayer = ({
   onClose,
   onPlayNext,
   onPlayPrev,
+  canPlayNext,
+  canPlayPrev,
   visible = true,
   autoPlay = true,
   initialSeekTime = 0,
@@ -32,7 +34,7 @@ const MusicPlayer = ({
   useEffect(() => {
     autoPlayRef.current = autoPlay;
     initialSeekTimeRef.current = initialSeekTime;
-  }, [song?.videoId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }); // run on every render so refs always reflect latest props
 
   // Stable prop refs — updated every render, never in dep arrays
   const onPlaybackStateChangeRef = useRef(onPlaybackStateChange);
@@ -113,13 +115,14 @@ const MusicPlayer = ({
   }, [releaseWakeLock]);
 
   const handleEnded = useCallback(() => {
-    const hasNext = !!onPlayNextRef.current;
-    if (hasNext) {
+    const nextFn = onPlayNextRef.current;
+    if (nextFn) {
       // Mark as transitioning — keeps media session alive between tracks
       isTransitioningRef.current = true;
-      onPlayNextRef.current?.();
+      nextFn();
     } else {
       // No next track — genuinely stop
+      isTransitioningRef.current = false;
       setIsPlaying(false);
       releaseWakeLock();
     }
@@ -133,13 +136,16 @@ const MusicPlayer = ({
     if ((initialSeekTimeRef.current || 0) > 0) {
       audio.currentTime = initialSeekTimeRef.current;
     }
-    // Auto-play if requested or if transitioning between tracks
-    if (autoPlayRef.current || isTransitioningRef.current) {
+    // Auto-play if:
+    //  (a) user explicitly started playback (autoPlayRef), OR
+    //  (b) we're mid-transition between tracks (isTransitioningRef)
+    if (isTransitioningRef.current || autoPlayRef.current) {
       onUnlockAudioRef.current?.();
       audio.play().then(() => {
         // Clear the transition flag once the new track starts playing
         isTransitioningRef.current = false;
-      }).catch(() => {
+      }).catch((err) => {
+        console.warn('MusicPlayer: auto-play failed', err);
         isTransitioningRef.current = false;
       });
     } else {
@@ -184,7 +190,10 @@ const MusicPlayer = ({
       setIsPlaying(false);
     }
 
-    // The src is set via JSX, but we need to load the new source
+    // Explicitly set src before calling load() — do NOT rely solely on JSX
+    // attribute, because React may not have committed the new src to the DOM
+    // yet when this effect runs, causing load() to reload the old URL.
+    audio.src = resolvedUrl;
     audio.load();
 
     return () => {
@@ -426,7 +435,7 @@ const MusicPlayer = ({
                 </div>
 
                 <div className="flex items-center justify-center gap-6">
-                  <button onClick={onPlayPrev} disabled={!onPlayPrev} className="text-white/50 hover:text-white disabled:opacity-20 transition-colors">
+                  <button onClick={onPlayPrev} disabled={canPlayPrev === undefined ? !onPlayPrev : !canPlayPrev} className="text-white/50 hover:text-white disabled:opacity-20 transition-colors">
                     <SkipBack className="w-5 h-5" />
                   </button>
                   <button
@@ -436,7 +445,7 @@ const MusicPlayer = ({
                   >
                     {isPlaying ? <Pause className="w-6 h-6 text-white" /> : <Play className="w-6 h-6 text-white ml-0.5" />}
                   </button>
-                  <button onClick={onPlayNext} disabled={!onPlayNext} className="text-white/50 hover:text-white disabled:opacity-20 transition-colors">
+                  <button onClick={onPlayNext} disabled={canPlayNext === undefined ? !onPlayNext : !canPlayNext} className="text-white/50 hover:text-white disabled:opacity-20 transition-colors">
                     <SkipForward className="w-5 h-5" />
                   </button>
                 </div>

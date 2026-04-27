@@ -101,6 +101,8 @@ const defaultState = {
   partnerProfilePic: localStorage.getItem('partnerProfilePic') || null,
   mode: localStorage.getItem('chat_mode') || 'calm',
   messages: [],
+  messagesPrefetched: false,
+  messagesPrefetchHasMore: true,
   goals: [],
   currentSong: persistedMusicState?.currentSong || null,
   currentQueue: persistedMusicState?.currentQueue || [],
@@ -265,6 +267,45 @@ export const AppProvider = ({ children }) => {
       return;
     }
 
+    // ── Prefetch messages immediately from localStorage cache ────────────
+    // This runs synchronously before any network call so messages are already
+    // in state by the time the user navigates to Chat.
+    const currentMode = localStorage.getItem('chat_mode') || 'calm';
+    const cachedMessages = readRecentCache(currentMode);
+    if (cachedMessages.length) {
+      setState((s) => ({
+        ...s,
+        messages: sortMessagesAsc(cachedMessages),
+        messagesPrefetched: true, // cache hit — Chat can skip its own fetch
+        messagesPrefetchHasMore: true, // unknown yet, Chat will re-check on scroll
+      }));
+    }
+
+    // ── Background API prefetch ───────────────────────────────────────────
+    // Fire the /messages API call immediately so fresh data arrives before
+    // or shortly after the user opens chat. Store hasMore for pagination.
+    const prefetchMessages = async (mode) => {
+      try {
+        const { data } = await api.get('/messages', { params: { mode, limit: 50 } });
+        setState((s) => {
+          const currentUserId = s.user?.id || '';
+          const normalized = (data.messages || data).map((message) =>
+            normalizeChatMessage(message, currentUserId, mode)
+          );
+          writeRecentCache(mode, normalized);
+          return {
+            ...s,
+            messages: sortMessagesAsc(normalized),
+            messagesPrefetched: true,
+            messagesPrefetchHasMore: Boolean(data?.has_more),
+          };
+        });
+      } catch (e) {
+        // Prefetch failure is non-fatal — Chat will handle its own fetch
+        console.warn('Background message prefetch failed:', e?.message);
+      }
+    };
+
     // Hydrate from cache immediately — removes the full-screen spinner on
     // every cold start / PWA resume.
     const cached = readCachedUser();
@@ -272,7 +313,9 @@ export const AppProvider = ({ children }) => {
       // Apply cached snapshot so the UI renders without waiting on the network.
       syncUserState(cached);
       // Then verify in the background; syncUserState will update on success.
+      // Also kick off message prefetch in parallel.
       (async () => {
+        prefetchMessages(currentMode);
         const user = await fetchUser();
         if (user) {
           try {
@@ -283,7 +326,7 @@ export const AppProvider = ({ children }) => {
         }
       })();
     } else {
-      // No cache — show spinner until network resolves.
+      // No cache — show spinner until network resolves, then prefetch.
       (async () => {
         const user = await fetchUser();
         try {
@@ -291,6 +334,8 @@ export const AppProvider = ({ children }) => {
         } catch (e) {
           console.warn('Failed to request notification permission on mount', e);
         }
+        // Prefetch after auth so we have a valid token
+        prefetchMessages(currentMode);
       })();
     }
 
@@ -541,6 +586,9 @@ export const AppProvider = ({ children }) => {
         return {
           ...s,
           messages: sortMessagesAsc(normalized),
+          // Mark as prefetched so Chat knows data is fresh from API
+          messagesPrefetched: true,
+          messagesPrefetchHasMore: Boolean(data?.has_more),
         };
       });
       return {
@@ -552,6 +600,12 @@ export const AppProvider = ({ children }) => {
       console.error('Failed to fetch messages:', e);
       return { hasMore: false, loaded: 0, oldestTimestamp: null };
     }
+  }, []);
+
+  // Called by Chat after it consumes the prefetched data, so a mode-switch
+  // or re-mount re-fetches fresh data for that mode.
+  const clearMessagesPrefetch = useCallback(() => {
+    setState((s) => ({ ...s, messagesPrefetched: false, messagesPrefetchHasMore: true }));
   }, []);
 
   const loadOlderMessages = useCallback(async (mode, before) => {
@@ -905,12 +959,15 @@ export const AppProvider = ({ children }) => {
 
   const playNextTrack = useCallback(() => {
     setState((s) => {
-      if (s.currentIndex >= s.currentQueue.length - 1) return s;
+      const qLen = s.currentQueue.length;
+      if (qLen === 0) return s;
+      // If there is a next track, advance; otherwise stay (do not loop)
+      if (s.currentIndex >= qLen - 1) return s; // already at last track
       const nextIndex = s.currentIndex + 1;
       return {
         ...s,
         currentIndex: nextIndex,
-        currentSong: s.currentQueue[nextIndex] || s.currentSong,
+        currentSong: s.currentQueue[nextIndex],
         musicPosition: 0,
         musicWasPlaying: true,
       };
@@ -919,12 +976,14 @@ export const AppProvider = ({ children }) => {
 
   const playPrevTrack = useCallback(() => {
     setState((s) => {
-      if (s.currentIndex <= 0) return s;
+      const qLen = s.currentQueue.length;
+      if (qLen === 0) return s;
+      if (s.currentIndex <= 0) return s; // already at first track
       const prevIndex = s.currentIndex - 1;
       return {
         ...s,
         currentIndex: prevIndex,
-        currentSong: s.currentQueue[prevIndex] || s.currentSong,
+        currentSong: s.currentQueue[prevIndex],
         musicPosition: 0,
         musicWasPlaying: true,
       };
@@ -1008,6 +1067,7 @@ export const AppProvider = ({ children }) => {
         playNextTrack,
         playPrevTrack,
         closeMusicPlayer,
+        clearMessagesPrefetch,
         updateMusicPlayback,
         deleteMessage,
         searchMessages,
