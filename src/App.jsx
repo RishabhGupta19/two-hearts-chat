@@ -102,6 +102,10 @@ const GlobalMusicPlayer = ({ onUnlockAudio }) => {
   const location = useLocation();
   const showPlayerUi = location.pathname === "/music";
 
+  const hasQueue = currentQueue.length > 1;
+  const canGoNext = hasQueue && currentIndex < currentQueue.length - 1;
+  const canGoPrev = hasQueue && currentIndex > 0;
+
   return (
     <AnimatePresence>
       {currentSong && (
@@ -114,8 +118,13 @@ const GlobalMusicPlayer = ({ onUnlockAudio }) => {
           onUnlockAudio={onUnlockAudio}
           onPlaybackStateChange={updateMusicPlayback}
           onClose={closeMusicPlayer}
-          onPlayNext={currentIndex < currentQueue.length - 1 ? playNextTrack : null}
-          onPlayPrev={currentIndex > 0 ? playPrevTrack : null}
+          // Always pass the function when queue has songs — handleEnded needs
+          // a non-null onPlayNext to advance the queue. canPlayNext controls
+          // the UI disabled state separately.
+          onPlayNext={hasQueue ? playNextTrack : null}
+          onPlayPrev={hasQueue ? playPrevTrack : null}
+          canPlayNext={canGoNext}
+          canPlayPrev={canGoPrev}
         />
       )}
     </AnimatePresence>

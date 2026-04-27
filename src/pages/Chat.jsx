@@ -48,6 +48,7 @@ const Chat = () => {
     partnerName, addGoal, resolveVent, isLinked, coupleId,
     userName, userRole, user, addWsMessage, removeMessageByTempId, loadOlderMessages,
     deleteMessage, searchMessages, fetchMessageContext,
+    messagesPrefetched, messagesPrefetchHasMore, clearMessagesPrefetch,
   } = useApp();
 
   // pull partner avatar from context (kept in AppContext)
@@ -377,9 +378,27 @@ const Chat = () => {
   }, [fetchMessageContext, isCalm, mode]);
 
   const backToLatestMessages = useCallback(() => {
+    // 1. Hide the scroll container immediately to avoid a flash of wrong position
+    //    while React swaps from focusedMessages → currentMessages.
+    setScrollReady(false);
+
+    // 2. Reset all scroll-suppression flags so the scroll-to-bottom can proceed.
+    suppressAutoScrollRef.current = false;
+    shouldRestoreScrollRef.current = null;
+    isPositioningRef.current = true; // block the currentMessages auto-scroll effect
+
+    // 3. Switch back to the full message list.
     setFocusedMessages(null);
     setFocusedTargetId(null);
-    requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }));
+
+    // 4. After React re-renders the full list, jump to bottom and reveal.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        isPositioningRef.current = false;
+        setScrollReady(true);
+      });
+    });
   }, []);
 
   const jumpToMessage = useCallback(async (messageId) => {
@@ -504,6 +523,27 @@ const Chat = () => {
 
   useEffect(() => {
     let active = true;
+
+    // If messages were already prefetched by AppContext at boot time and the
+    // current mode matches, skip the network call — just position the scroll.
+    if (messagesPrefetched && currentMessages.length > 0) {
+      hasMoreRef.current = messagesPrefetchHasMore;
+      isPositioningRef.current = true;
+      setScrollReady(false);
+      requestAnimationFrame(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        requestAnimationFrame(() => {
+          if (!active) return;
+          isPositioningRef.current = false;
+          setScrollReady(true);
+        });
+      });
+      // Clear the flag so a mode-switch or future re-mount re-fetches properly
+      clearMessagesPrefetch();
+      return () => { active = false; };
+    }
+
+    // No prefetch available — normal fetch path
     setScrollReady(false);
     isPositioningRef.current = true;
 
@@ -523,6 +563,7 @@ const Chat = () => {
     return () => {
       active = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, fetchMessages]);
 
   // Sync seen from DB (messages with seen: true)
@@ -778,6 +819,8 @@ const Chat = () => {
 
   const confirmModeSwitch = () => {
     if (pendingMode) {
+      // Clear prefetch so the mode-switch triggers a fresh fetch for the new mode
+      clearMessagesPrefetch();
       setMode(pendingMode);
       setInput('');
       setReplyingTo(null);
