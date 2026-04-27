@@ -71,11 +71,11 @@ const MusicPlayer = ({
     try {
       wakeLockRef.current = await navigator.wakeLock.request('screen');
       wakeLockRef.current?.addEventListener?.('release', () => { wakeLockRef.current = null; });
-    } catch {}
+    } catch { }
   }, []);
 
   const releaseWakeLock = useCallback(async () => {
-    try { await wakeLockRef.current?.release?.(); } catch {}
+    try { await wakeLockRef.current?.release?.(); } catch { }
     finally { wakeLockRef.current = null; }
   }, []);
 
@@ -141,9 +141,13 @@ const MusicPlayer = ({
     //  (b) we're mid-transition between tracks (isTransitioningRef)
     if (isTransitioningRef.current || autoPlayRef.current) {
       onUnlockAudioRef.current?.();
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'playing';
+      }
       audio.play().then(() => {
         // Clear the transition flag once the new track starts playing
         isTransitioningRef.current = false;
+        requestWakeLock();
       }).catch((err) => {
         console.warn('MusicPlayer: auto-play failed', err);
         isTransitioningRef.current = false;
@@ -209,19 +213,22 @@ const MusicPlayer = ({
   // toggles.
   useEffect(() => {
     if (!('mediaSession' in navigator) || !song) return;
+    ['play', 'pause', 'nexttrack', 'previoustrack', 'seekto', 'stop'].forEach(action => {
+      try { navigator.mediaSession.setActionHandler(action, null); } catch { }
+    });
     navigator.mediaSession.metadata = new MediaMetadata({
       title: song.title,
       artist: song.channelTitle,
       artwork: [
-        { src: song.thumbnail, sizes: '96x96',   type: 'image/jpeg' },
-        { src: song.thumbnail, sizes: '256x256',  type: 'image/jpeg' },
-        { src: song.thumbnail, sizes: '512x512',  type: 'image/jpeg' },
+        { src: song.thumbnail, sizes: '96x96', type: 'image/jpeg' },
+        { src: song.thumbnail, sizes: '256x256', type: 'image/jpeg' },
+        { src: song.thumbnail, sizes: '512x512', type: 'image/jpeg' },
       ],
     });
     navigator.mediaSession.setActionHandler('play', () => {
       resumeOnVisibleRef.current = true;
       onUnlockAudioRef.current?.();
-      audioRef.current?.play().catch(() => {});
+      audioRef.current?.play().catch(() => { });
       navigator.mediaSession.playbackState = 'playing';
     });
     navigator.mediaSession.setActionHandler('pause', () => {
@@ -267,7 +274,7 @@ const MusicPlayer = ({
         playbackRate: 1,
         position: Math.min(currentTime, duration),
       });
-    } catch {}
+    } catch { }
   }, [currentTime, duration]);
 
   // ── Visibility change — re-acquire wake lock on foreground ────────────────
@@ -302,10 +309,10 @@ const MusicPlayer = ({
       audio.pause();
       try {
         onPlaybackStateChangeRef.current?.({ isPlaying: false, currentTime: audio.currentTime || 0 });
-      } catch {}
+      } catch { }
     } else {
       resumeOnVisibleRef.current = true;
-      audio.play().catch(() => {});
+      audio.play().catch(() => { });
       assertMediaSession(); // reclaim audio focus from other apps
     }
   };
@@ -348,7 +355,7 @@ const MusicPlayer = ({
                 setResolvedUrl(freshUrl);
                 return; // will trigger re-load via the resolvedUrl effect
               }
-            } catch {}
+            } catch { }
           }
           setIsPlaying(false);
         }}
