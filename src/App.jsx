@@ -121,8 +121,9 @@ const GlobalMusicPlayer = ({ onUnlockAudio }) => {
           // Always pass the function when queue has songs — handleEnded needs
           // a non-null onPlayNext to advance the queue. canPlayNext controls
           // the UI disabled state separately.
-          onPlayNext={hasQueue ? playNextTrack : null}
-          onPlayPrev={hasQueue ? playPrevTrack : null}
+          // Change this in GlobalMusicPlayer:
+          onPlayNext={canGoNext ? playNextTrack : null}
+          onPlayPrev={canGoPrev ? playPrevTrack : null}
           canPlayNext={canGoNext}
           canPlayPrev={canGoPrev}
         />
