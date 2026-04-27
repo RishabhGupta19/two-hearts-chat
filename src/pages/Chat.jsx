@@ -986,7 +986,7 @@ const Chat = () => {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, ease: 'easeOut' }}
-              className="w-full max-w-sm text-center rounded-2xl border border-border bg-card/80 backdrop-blur px-6 py-10 shadow-warm"
+              className="angry-breathing w-full max-w-sm text-center rounded-2xl border border-destructive/40 bg-card/80 backdrop-blur px-6 py-10"
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
