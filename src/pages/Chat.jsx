@@ -1344,6 +1344,7 @@ const Chat = () => {
               )}
           </div>
         )}
+        </>)}
 
         <ResolutionModal open={showResolution} onClose={() => setShowResolution(false)} />
 
