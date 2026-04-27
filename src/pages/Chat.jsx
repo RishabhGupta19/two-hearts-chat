@@ -937,7 +937,39 @@ const Chat = () => {
         )}
 
 
-
+        {isVent ? (
+          <div className="flex-1 min-h-0 flex items-center justify-center px-6 py-10">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+              className="w-full max-w-sm text-center rounded-2xl border border-border bg-card/80 backdrop-blur px-6 py-10 shadow-warm"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.1, type: 'spring', stiffness: 200, damping: 18 }}
+                className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-primary/15 text-2xl"
+              >
+                🌿
+              </motion.div>
+              <h2 className="font-heading text-2xl font-semibold text-foreground mb-2">
+                Vent mode is coming soon
+              </h2>
+              <p className="text-sm text-muted-foreground font-body leading-relaxed mb-6">
+                A private, judgment-free space to let it all out — guided by Luna.
+                We're carefully crafting it to feel just right. Hang tight. 💜
+              </p>
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => handleModeSwitch('calm')}
+                className="rounded-pill bg-primary px-5 py-2.5 text-xs font-medium text-primary-foreground shadow-soft"
+              >
+                Back to Calm chat
+              </motion.button>
+            </motion.div>
+          </div>
+        ) : (<>
         <div
           data-pull-scroll
           ref={chatScrollRef}
