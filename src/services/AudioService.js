@@ -8,17 +8,21 @@
  *   - getAudioStream(track)   → tries each provider in order, with caching
  *
  * Provider order:
- *   1. InvidiousProvider  (larger catalog — YouTube)
- *   2. JioSaavnProvider   (existing, reliable fallback)
+ *   1. JioSaavnProvider   (primary — has direct MP3 URLs, no extra network call needed)
+ *   2. InvidiousProvider  (last-resort fallback for legacy YouTube-sourced library tracks)
+ *
+ * NOTE: Invidious is intentionally last because public instances are increasingly
+ * unstable (401 auth walls, YouTube blocking). JioSaavn-native tracks short-circuit
+ * in getAudioStream() before any provider loop runs.
  */
 import { JioSaavnProvider } from '@/providers/JioSaavnProvider';
 import { InvidiousProvider } from '@/providers/InvidiousProvider';
 
 // ── Provider instances ────────────────────────────────────────────────────
-const jiosaavn  = new JioSaavnProvider();
+const jiosaavn = new JioSaavnProvider();
 const invidious = new InvidiousProvider();
 
-const providers = [invidious, jiosaavn];
+const providers = [jiosaavn, invidious];
 
 // ── Stream URL cache ──────────────────────────────────────────────────────
 const cache = new Map();
@@ -34,10 +38,11 @@ function getCached(trackId) {
   return entry.url;
 }
 
-function setCache(trackId, url) {
+function setCache(trackId, url, source) {
+  if (source === 'jiosaavn') return; // skip caching for JioSaavn
+
   cache.set(trackId, { url, expiry: Date.now() + CACHE_TTL_MS });
 
-  // Evict oldest entries if cache grows too large
   if (cache.size > 200) {
     const oldest = cache.keys().next().value;
     cache.delete(oldest);
@@ -74,33 +79,21 @@ export async function search(query) {
  * @returns {Promise<string>} playable audio URL
  * @throws {Error} if all providers fail
  */
-export async function getAudioStream(track) {
+export async function getAudioStream(track, { forceFresh = false } = {}) {
   if (!track?.videoId) throw new Error('AudioService: track has no videoId');
 
   // Check cache first
-  const cached = getCached(track.videoId);
-  if (cached) return cached;
-
-  // If the track already has a working audioUrl (from JioSaavn search),
-  // use it directly — no need to hit Invidious.
-  if (track.audioUrl && track.source === 'jiosaavn') {
-    setCache(track.videoId, track.audioUrl);
-    return track.audioUrl;
+  if (!forceFresh) {
+    const cached = getCached(track.videoId);
+    if (cached) return cached;
   }
+
 
   // Try each provider in order
   const errors = [];
   for (const provider of providers) {
-    try {
-      const url = await provider.getAudioStream(track);
-      if (url) {
-        setCache(track.videoId, url);
-        return url;
-      }
-    } catch (err) {
-      errors.push(`${provider.name}: ${err.message}`);
-      // Continue to next provider
-    }
+    const url = await provider.getAudioStream(track);
+    return url;
   }
 
   throw new Error(
