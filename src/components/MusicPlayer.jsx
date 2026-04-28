@@ -54,6 +54,7 @@ const MusicPlayer = ({
   const [resolvedUrl, setResolvedUrl] = useState(null);
   const streamRetryRef = useRef(0);
   const progressBarRef = useRef(null);
+  const nextAudioRef = useRef(new Audio());
 
   const isPlayingRef = useRef(false);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
@@ -63,7 +64,27 @@ const MusicPlayer = ({
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
+  const preloadNextSong = useCallback(async () => {
+    if (!queue?.length) return;
 
+    const currentIndex = queue.findIndex(s => s.videoId === song.videoId);
+    const nextSong = queue[currentIndex + 1];
+
+    if (!nextSong) return;
+
+    try {
+      const url = await getAudioStream(nextSong, { forceFresh: true });
+
+      const audio = nextAudioRef.current;
+      audio.src = url;
+      audio.preload = "auto";
+      audio.load();
+
+      console.log("Preloaded next:", nextSong.title);
+    } catch (e) {
+      console.warn("Preload failed", e);
+    }
+  }, [song?.videoId, queue]);
   // ── Screen Wake Lock ──────────────────────────────────────────────────────
   const requestWakeLock = useCallback(async () => {
     if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
@@ -100,6 +121,7 @@ const MusicPlayer = ({
   const handlePlay = useCallback(() => {
     setIsPlaying(true);
     requestWakeLock();
+    preloadNextSong();
     assertMediaSession(); // reclaim audio focus from other apps
     const audio = audioRef.current;
     if (audio) {
@@ -114,19 +136,30 @@ const MusicPlayer = ({
     releaseWakeLock();
   }, [releaseWakeLock]);
 
-  const handleEnded = useCallback(() => {
+  const handleEnded = useCallback(async () => {
     const nextFn = onPlayNextRef.current;
-    if (nextFn) {
-      // Mark as transitioning — keeps media session alive between tracks
-      isTransitioningRef.current = true;
-      nextFn();
-    } else {
-      // No next track — genuinely stop
-      isTransitioningRef.current = false;
-      setIsPlaying(false);
-      releaseWakeLock();
+    if (!nextFn) return;
+
+    const currentIndex = queue.findIndex(s => s.videoId === song.videoId);
+    const nextSong = queue[currentIndex + 1];
+
+    if (!nextSong) return;
+
+    try {
+      const freshUrl = await getAudioStream(nextSong, { forceFresh: true });
+
+      const audio = audioRef.current;
+      audio.src = freshUrl;
+      audio.load();
+
+      await audio.play();
+
+      nextFn(); // update UI
+    } catch (e) {
+      console.error("Next song failed:", e);
+      nextFn(); // fallback
     }
-  }, [releaseWakeLock]);
+  }, [queue, song]);
 
   const handleLoadedMetadata = useCallback(() => {
     const audio = audioRef.current;
@@ -350,7 +383,7 @@ const MusicPlayer = ({
           if (streamRetryRef.current < 2) {
             streamRetryRef.current += 1;
             try {
-              const freshUrl = await getAudioStream({ ...song, audioUrl: '' });
+              const freshUrl = await getAudioStream(song, { forceFresh: true });
               if (freshUrl && freshUrl !== resolvedUrl) {
                 setResolvedUrl(freshUrl);
                 return; // will trigger re-load via the resolvedUrl effect
