@@ -254,6 +254,32 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
 export const AppProvider = ({ children }) => {
   const [state, setState] = useState(defaultState);
 
+  // ── Background API prefetch ─────────────────────────────────────────────
+  // Defined as a useCallback so it can be called at boot AND reactively
+  // whenever a foreground FCM push signals that new messages have arrived
+  // (e.g. user is on Dashboard/Music — WebSocket is not active).
+  const prefetchMessages = useCallback(async (mode) => {
+    try {
+      const { data } = await api.get('/messages', { params: { mode, limit: 50 } });
+      setState((s) => {
+        const currentUserId = s.user?.id || '';
+        const normalized = (data.messages || data).map((message) =>
+          normalizeChatMessage(message, currentUserId, mode)
+        );
+        writeRecentCache(mode, normalized);
+        return {
+          ...s,
+          messages: sortMessagesAsc(normalized),
+          messagesPrefetched: true,
+          messagesPrefetchHasMore: Boolean(data?.has_more),
+        };
+      });
+    } catch (e) {
+      // Prefetch failure is non-fatal — Chat will handle its own fetch
+      console.warn('Background message prefetch failed:', e?.message);
+    }
+  }, []);
+
   // -------------------------------------------------------------------------
   // On mount: optimistically hydrate from the cached user snapshot so the
   // app is immediately usable (no spinner on PWA resume), then verify with
@@ -282,29 +308,9 @@ export const AppProvider = ({ children }) => {
     }
 
     // ── Background API prefetch ───────────────────────────────────────────
-    // Fire the /messages API call immediately so fresh data arrives before
-    // or shortly after the user opens chat. Store hasMore for pagination.
-    const prefetchMessages = async (mode) => {
-      try {
-        const { data } = await api.get('/messages', { params: { mode, limit: 50 } });
-        setState((s) => {
-          const currentUserId = s.user?.id || '';
-          const normalized = (data.messages || data).map((message) =>
-            normalizeChatMessage(message, currentUserId, mode)
-          );
-          writeRecentCache(mode, normalized);
-          return {
-            ...s,
-            messages: sortMessagesAsc(normalized),
-            messagesPrefetched: true,
-            messagesPrefetchHasMore: Boolean(data?.has_more),
-          };
-        });
-      } catch (e) {
-        // Prefetch failure is non-fatal — Chat will handle its own fetch
-        console.warn('Background message prefetch failed:', e?.message);
-      }
-    };
+    // prefetchMessages is defined above as a useCallback so it can also be
+    // called from the foreground push handler. Call it here for the initial
+    // boot fetch in parallel with authentication.
 
     // Hydrate from cache immediately — removes the full-screen spinner on
     // every cold start / PWA resume.
@@ -687,6 +693,12 @@ export const AppProvider = ({ children }) => {
             }
           }).catch((err) => console.error('Service worker not ready for notifications', err));
         }
+
+        // Re-fetch messages so the new message appears in state immediately,
+        // even when the user is on another page and the WebSocket is inactive.
+        // This prevents the stale-cache bug where Chat shows prefetched data
+        // from boot and misses messages that arrived while the user was away.
+        prefetchMessages('calm').catch(() => {});
       } catch (err) {
         console.error('Error showing foreground notification', err);
       }
@@ -695,7 +707,7 @@ export const AppProvider = ({ children }) => {
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, []);
+  }, [prefetchMessages]);
 
   const sendMessage = useCallback(async (text) => {
     try {
