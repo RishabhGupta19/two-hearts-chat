@@ -3,30 +3,20 @@ import { useEffect, useRef, useCallback } from 'react';
 /**
  * useBackgroundAudio
  *
- * Plays a looping silent audio track to keep the OS audio session alive.
- * This prevents other apps (Spotify, YT Music) from hijacking earbud
- * hardware controls, because the OS sees our PWA as the active audio
- * session holder as long as *something* is playing.
+ * Plays a looping silent audio track via a native <audio> element to keep
+ * the OS audio session alive. This prevents other apps (Spotify, YT Music)
+ * from hijacking earbud hardware controls, because the OS sees our PWA as
+ * the active audio session holder as long as *something* is playing.
  *
- * Also provides an `unlock` callback for AudioContext resume on user
- * gestures.
+ * NOTE: We intentionally do NOT use AudioContext here. The OS gives native
+ * <audio> elements special background execution privileges that AudioContext
+ * doesn't get — AudioContext gets suspended when the app is backgrounded,
+ * which is the opposite of what we want.
  */
 const useBackgroundAudio = () => {
   const audioRef = useRef(null);
-  const audioContextRef = useRef(null);
 
   const unlock = useCallback(() => {
-    // AudioContext unlock
-    try {
-      if (!audioContextRef.current) {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (AC) audioContextRef.current = new AC();
-      }
-      if (audioContextRef.current?.state === 'suspended') {
-        audioContextRef.current.resume().catch(() => {});
-      }
-    } catch {}
-
     // Silent audio keep-alive — prevents other apps from stealing audio focus
     if (audioRef.current) return;
 
@@ -44,13 +34,10 @@ const useBackgroundAudio = () => {
     audioRef.current = audio;
   }, []);
 
-  // Resume AudioContext when the page becomes visible again
+  // Resume silent audio when the page becomes visible again
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        if (audioContextRef.current?.state === 'suspended') {
-          audioContextRef.current.resume().catch(() => {});
-        }
         // Re-start silent audio if it was somehow stopped
         if (audioRef.current?.paused) {
           audioRef.current.play().catch(() => {});
