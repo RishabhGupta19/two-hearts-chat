@@ -296,11 +296,33 @@ self.addEventListener('message', (event) => {
     if (event.data?.type === 'MSG_SEEN') {
       try {
         const ids = Array.isArray(event.data?.message_ids) ? event.data.message_ids : [];
+        const seenSet = new Set(ids.map(String));
+
         for (const id of ids) {
           const key = String(id);
           recentSeen.set(key, Date.now());
           // Auto-expire after 20s
           setTimeout(() => recentSeen.delete(key), 20000);
+        }
+
+        // Dismiss any open OS notifications whose message matches a seen id.
+        // Notifications are tagged with the message_id (dedupeKey), and their
+        // data payload also carries message_id / notification_id.
+        if (seenSet.size > 0) {
+          self.registration.getNotifications().then((openNotifications) => {
+            for (const n of openNotifications) {
+              const msgId   = String(n.data?.message_id   || '');
+              const notifId = String(n.data?.notification_id || '');
+              const tag     = String(n.tag || '');
+              if (
+                (msgId   && seenSet.has(msgId))   ||
+                (notifId && seenSet.has(notifId)) ||
+                (tag     && seenSet.has(tag))
+              ) {
+                n.close();
+              }
+            }
+          }).catch(() => { /* getNotifications not supported — ignore */ });
         }
       } catch (err) {
         // ignore

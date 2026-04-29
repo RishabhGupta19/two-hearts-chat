@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Pause, X, ChevronDown, ChevronUp, SkipBack, SkipForward } from 'lucide-react';
-import { getAudioStream } from '@/services/AudioService';
+import { getAudioStream, getTrackUrlSync } from '@/services/AudioService';
 
 // ── MusicPlayer component ─────────────────────────────────────────────────────
-// Uses a native <audio> element with direct MP3 URLs from JioSaavn.
-// Background playback works natively — no iframe hacks needed.
+// Uses a native <audio> element with direct CDN URLs from JioSaavn.
+// Background playback works natively — the OS gives native <audio> elements
+// special background privileges that AudioContext doesn't get.
+//
+// KEY BACKGROUND PLAYBACK STRATEGY:
+//   1. Pre-fetch next song's stream URL 30s before current song ends
+//   2. Media Session API tells the OS this is a music player
+//   3. Native <audio> element gets background execution privileges
+//   When the current song ends, the next URL is already resolved — no API
+//   calls needed in the background where JS is throttled.
 const MusicPlayer = ({
   song,
   queue = [],
@@ -22,7 +30,6 @@ const MusicPlayer = ({
 }) => {
   const audioRef = useRef(null);
   const wakeLockRef = useRef(null);
-  const progressIntervalRef = useRef(null);
   const isTransitioningRef = useRef(false);
 
   const lastPauseReasonRef = useRef(null);
@@ -54,37 +61,77 @@ const MusicPlayer = ({
   const [resolvedUrl, setResolvedUrl] = useState(null);
   const streamRetryRef = useRef(0);
   const progressBarRef = useRef(null);
-  const nextAudioRef = useRef(new Audio());
 
   const isPlayingRef = useRef(false);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+
+  // ── Prefetch system ─────────────────────────────────────────────────────────
+  // Stores the resolved URL for the NEXT song in the queue so that when the
+  // current song ends, we can switch instantly without any async API calls
+  // (which would be throttled/killed by the browser in background).
+  const prefetchedNextRef = useRef({ videoId: null, url: null });
+  const prefetchInFlightRef = useRef(null); // prevent duplicate fetches
 
   const fmt = (s) => {
     const m = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
-  const preloadNextSong = useCallback(async () => {
+
+  /**
+   * Pre-fetch the next song's stream URL and start buffering its audio data.
+   * Called at 30s remaining AND when playback starts.
+   */
+  const prefetchNextSong = useCallback(async () => {
     if (!queue?.length) return;
 
-    const currentIndex = queue.findIndex(s => s.videoId === song.videoId);
-    const nextSong = queue[currentIndex + 1];
-
+    const currentIdx = queue.findIndex(s => s.videoId === song?.videoId);
+    const nextSong = queue[currentIdx + 1];
     if (!nextSong) return;
 
+    // Already prefetched for this song
+    if (prefetchedNextRef.current.videoId === nextSong.videoId) return;
+
+    // Already fetching
+    if (prefetchInFlightRef.current === nextSong.videoId) return;
+    prefetchInFlightRef.current = nextSong.videoId;
+
     try {
-      const url = await getAudioStream(nextSong, { forceFresh: true });
+      // Resolve the stream URL (instant if track has audioUrl, otherwise API call)
+      const url = await getAudioStream(nextSong);
+      if (!url) return;
 
-      const audio = nextAudioRef.current;
-      audio.src = url;
-      audio.preload = "auto";
-      audio.load();
+      // Store for handleEnded
+      prefetchedNextRef.current = { videoId: nextSong.videoId, url };
 
-      console.log("Preloaded next:", nextSong.title);
+      // Start buffering audio data via a hidden Audio element so the browser
+      // caches the bytes. When we later set this URL on the main <audio>,
+      // the data is already available — no network fetch in the background.
+      try {
+        const preloadAudio = new Audio();
+        preloadAudio.preload = 'auto';
+        preloadAudio.src = url;
+        preloadAudio.load();
+        // Let it buffer ~10s of audio then release
+        setTimeout(() => {
+          try { preloadAudio.src = ''; preloadAudio.load(); } catch {}
+        }, 15000);
+      } catch {}
+
+      console.log('[MusicPlayer] Prefetched next:', nextSong.title);
     } catch (e) {
-      console.warn("Preload failed", e);
+      console.warn('[MusicPlayer] Prefetch failed:', e);
+    } finally {
+      prefetchInFlightRef.current = null;
     }
   }, [song?.videoId, queue]);
+
+  // Reset prefetch state when song changes
+  useEffect(() => {
+    prefetchedNextRef.current = { videoId: null, url: null };
+    prefetchInFlightRef.current = null;
+  }, [song?.videoId]);
+
   // ── Screen Wake Lock ──────────────────────────────────────────────────────
   const requestWakeLock = useCallback(async () => {
     if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
@@ -101,15 +148,6 @@ const MusicPlayer = ({
   }, []);
 
   // ── Audio event handlers ──────────────────────────────────────────────────
-  const handleTimeUpdate = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const ct = audio.currentTime || 0;
-    const dur = audio.duration || 0;
-    setCurrentTime(ct);
-    setDuration(dur);
-    if (dur > 0) setProgress((ct / dur) * 100);
-  }, []);
 
   // Helper: forcefully assert our Media Session as the active one so the OS
   // doesn't hand audio focus (and earbud controls) to Spotify / YT Music.
@@ -118,16 +156,39 @@ const MusicPlayer = ({
     navigator.mediaSession.playbackState = 'playing';
   }, []);
 
+  /**
+   * handleTimeUpdate — fires continuously during playback.
+   * At 30s remaining, triggers prefetch of the next song's URL.
+   */
+  const handleTimeUpdate = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const ct = audio.currentTime || 0;
+    const dur = audio.duration || 0;
+    setCurrentTime(ct);
+    setDuration(dur);
+    if (dur > 0) setProgress((ct / dur) * 100);
+
+    // ── PRE-FETCH TRIGGER ─────────────────────────────────────────────────
+    // When 30 seconds remain, resolve the next song's URL while JS is still
+    // active. This is THE critical fix for background playback — by the time
+    // the song ends, we already have the URL and don't need any API calls.
+    const timeLeft = dur - ct;
+    if (dur > 0 && timeLeft < 30 && timeLeft > 0) {
+      prefetchNextSong();
+    }
+  }, [prefetchNextSong]);
+
   const handlePlay = useCallback(() => {
     setIsPlaying(true);
     requestWakeLock();
-    preloadNextSong();
+    prefetchNextSong(); // also prefetch when playback starts
     assertMediaSession(); // reclaim audio focus from other apps
     const audio = audioRef.current;
     if (audio) {
       onPlaybackStateChangeRef.current?.({ isPlaying: true, currentTime: audio.currentTime || 0 });
     }
-  }, [requestWakeLock, assertMediaSession]);
+  }, [requestWakeLock, assertMediaSession, prefetchNextSong]);
 
   const handlePause = useCallback(() => {
     // During track transitions, don't signal pause to avoid OS dismissing notification
@@ -136,29 +197,50 @@ const MusicPlayer = ({
     releaseWakeLock();
   }, [releaseWakeLock]);
 
-  const handleEnded = useCallback(async () => {
+  /**
+   * handleEnded — fires when the current song finishes.
+   *
+   * THIS IS SYNCHRONOUS BY DESIGN. No async calls, no awaits, no API fetches.
+   * In the background, browsers throttle JS timers and kill pending fetches.
+   * By using the pre-fetched URL, we avoid all of that.
+   */
+  const handleEnded = useCallback(() => {
     const nextFn = onPlayNextRef.current;
-    if (!nextFn) return;
+    const currentIdx = queue.findIndex(s => s.videoId === song?.videoId);
+    const nextSong = queue[currentIdx + 1];
 
-    const currentIndex = queue.findIndex(s => s.videoId === song.videoId);
-    const nextSong = queue[currentIndex + 1];
+    if (!nextSong || !nextFn) return;
 
-    if (!nextSong) return;
+    isTransitioningRef.current = true;
 
-    try {
-      const freshUrl = await getAudioStream(nextSong, { forceFresh: true });
+    // Use prefetched URL if available (ZERO latency, works in background!)
+    const prefetched = prefetchedNextRef.current;
+    let nextUrl = null;
 
-      const audio = audioRef.current;
-      audio.src = freshUrl;
-      audio.load();
-
-      await audio.play();
-
-      nextFn(); // update UI
-    } catch (e) {
-      console.error("Next song failed:", e);
-      nextFn(); // fallback
+    if (prefetched.videoId === nextSong.videoId && prefetched.url) {
+      nextUrl = prefetched.url;
+    } else {
+      // Fallback: check if the track object already has a direct URL
+      nextUrl = getTrackUrlSync(nextSong);
     }
+
+    if (nextUrl) {
+      // Set the URL directly on the audio element — no async needed
+      const audio = audioRef.current;
+      if (audio) {
+        audio.src = nextUrl;
+        audio.load();
+        audio.play().catch(() => {});
+      }
+      // Also set resolvedUrl state so the React effect doesn't re-load
+      setResolvedUrl(nextUrl);
+    }
+
+    // Reset prefetch state
+    prefetchedNextRef.current = { videoId: null, url: null };
+
+    // Notify parent to update state (currentSong, currentIndex)
+    nextFn();
   }, [queue, song]);
 
   const handleLoadedMetadata = useCallback(() => {
@@ -198,12 +280,10 @@ const MusicPlayer = ({
 
     const resolve = async () => {
       try {
-        // getAudioStream handles provider fallback + caching
         const url = await getAudioStream(song);
         if (!cancelled) setResolvedUrl(url);
       } catch (err) {
         console.warn('AudioService: stream resolution failed, using song.audioUrl', err);
-        // Fallback to whatever audioUrl the song already has
         if (!cancelled && song.audioUrl) setResolvedUrl(song.audioUrl);
       }
     };
@@ -218,6 +298,21 @@ const MusicPlayer = ({
     const audio = audioRef.current;
     if (!audio) return;
 
+    // Guard: if the audio element is already playing this exact URL,
+    // don't interrupt it (happens during track transitions where
+    // handleEnded already set the src directly).
+    if (audio.src === resolvedUrl && !audio.paused && !audio.ended) {
+      return;
+    }
+    // Also check for relative→absolute URL match
+    try {
+      const currentAbsolute = audio.src; // browser returns absolute
+      const resolvedAbsolute = new URL(resolvedUrl, window.location.href).href;
+      if (currentAbsolute === resolvedAbsolute && !audio.paused && !audio.ended) {
+        return;
+      }
+    } catch {}
+
     // Reset progress state but preserve isPlaying during transitions
     // so the OS doesn't dismiss the notification
     setProgress(0);
@@ -227,9 +322,6 @@ const MusicPlayer = ({
       setIsPlaying(false);
     }
 
-    // Explicitly set src before calling load() — do NOT rely solely on JSX
-    // attribute, because React may not have committed the new src to the DOM
-    // yet when this effect runs, causing load() to reload the old URL.
     audio.src = resolvedUrl;
     audio.load();
 
@@ -252,6 +344,7 @@ const MusicPlayer = ({
     navigator.mediaSession.metadata = new MediaMetadata({
       title: song.title,
       artist: song.channelTitle,
+      album: song.title, // helps some OS show richer notification
       artwork: [
         { src: song.thumbnail, sizes: '96x96', type: 'image/jpeg' },
         { src: song.thumbnail, sizes: '256x256', type: 'image/jpeg' },
