@@ -22,6 +22,11 @@ import NotFound from "./pages/NotFound";
 import IOSInstallBanner from "@/components/IOSInstallBanner";
 import { Loader2 } from "lucide-react";
 
+
+import ForgotPassword from "./pages/ForgotPassword";
+import VerifyOTP from "./pages/VerifyOTP";
+import ResetPassword from "./pages/ResetPassword";
+
 const queryClient = new QueryClient();
 
 // Foreground push handling is centralized in AppContext via subscribeToForegroundMessages
@@ -36,14 +41,27 @@ const AppRoutes = () => {
       </div>
     );
   }
+// commented because it is giving error in  forgot password feature
+  // if (!isAuthenticated) {
+  //   return (
+  //     <Routes>
+  //       <Route path="*" element={<Login />} />
+  //     </Routes>
+  //   );
+  // }
+// below changes for forgot password feature
+if (!isAuthenticated) {
+  return (
+    <Routes>
+      <Route path="/" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/verify-otp" element={<VerifyOTP />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="*" element={<Login />} />
+    </Routes>
+  );
+}
 
-  if (!isAuthenticated) {
-    return (
-      <Routes>
-        <Route path="*" element={<Login />} />
-      </Routes>
-    );
-  }
 
   if (!userRole) {
     return (
@@ -82,6 +100,10 @@ const AppRoutes = () => {
       <Route path="/gallery" element={<Gallery />} />
       <Route path="/music" element={<Music />} />
       <Route path="*" element={<NotFound />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/verify-otp" element={<VerifyOTP />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      
     </Routes>
   );
 };
