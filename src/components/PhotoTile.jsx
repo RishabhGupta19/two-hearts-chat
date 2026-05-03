@@ -101,18 +101,20 @@ export default function PhotoTile({ photo, onClick }) {
       className="cursor-pointer relative"
     >
       <div
-        className="aspect-square rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow"
+        className="aspect-square rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow relative"
         style={{
           border: `3px solid ${borderColor}`,
           boxShadow: `0 0 8px ${borderColor}80, ${borderColor === 'rgb(168, 85, 247)' ? '' : '0 4px 12px rgba(0, 0, 0, 0.15)'}`,
           background: 'hsl(var(--muted))',
         }}
       >
-        {/* Blurred low-res placeholder */}
+        {/* Enhanced loading skeleton */}
         {!loaded && (
-          <div
-            className="absolute inset-0 animate-pulse"
-            style={{ background: 'hsl(var(--muted))' }}
+          <motion.div
+            initial={{ opacity: 0.4 }}
+            animate={{ opacity: 0.7 }}
+            transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+            className="absolute inset-0 bg-gradient-to-br from-muted to-muted-foreground/20 z-10"
           />
         )}
         <img
