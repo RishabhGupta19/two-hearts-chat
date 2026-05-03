@@ -1,7 +1,47 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
+import api, { resolveApiUrl } from '@/api';
 
 const Lightbox = ({ photo, onClose }) => {
+  const imageSrc = photo?.id
+    ? resolveApiUrl(`/gallery/photo/${photo.id}/`)
+    : photo?.image_url;
+  const [displaySrc, setDisplaySrc] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = null;
+
+    setDisplaySrc('');
+
+    if (!photo?.id) {
+      setDisplaySrc(photo?.image_url || '');
+      return undefined;
+    }
+
+    const loadImage = async () => {
+      try {
+        const response = await api.get(`/gallery/photo/${photo.id}/`, {
+          responseType: 'blob',
+        });
+        if (!active) return;
+        objectUrl = URL.createObjectURL(response.data);
+        setDisplaySrc(objectUrl);
+      } catch (error) {
+        console.error('Failed to load gallery image:', error);
+        if (active) setDisplaySrc(photo?.image_url || '');
+      }
+    };
+
+    loadImage();
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [photo?.id, photo?.image_url]);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -28,7 +68,7 @@ const Lightbox = ({ photo, onClose }) => {
 
         {/* Image */}
         <img
-          src={photo.image_url}
+          src={displaySrc || imageSrc}
           alt="Full view"
           className="w-full h-full object-contain rounded-lg"
         />
