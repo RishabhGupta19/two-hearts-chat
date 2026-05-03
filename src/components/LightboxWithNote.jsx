@@ -354,7 +354,15 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
               }}
               className="flex flex-col overflow-hidden"
             >
-              <div className="flex-1 overflow-hidden bg-transparent flex items-center justify-center">
+              <div className="flex-1 overflow-hidden bg-transparent flex items-center justify-center relative">
+                {!displaySrc && (
+                  <motion.div
+                    initial={{ opacity: 0.6 }}
+                    animate={{ opacity: 0.3 }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="absolute inset-0 bg-gradient-to-br from-purple-400/30 to-purple-600/20 rounded-lg"
+                  />
+                )}
                 <img
                   src={displaySrc || imageSrc}
                   alt="Photo"
@@ -363,7 +371,9 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
                   onTouchMove={onTouchMove}
                   onTouchEnd={onTouchEnd}
                   onDoubleClick={reset}
-                  className="max-w-full max-h-full object-contain rounded-lg"
+                  className={`max-w-full max-h-full object-contain rounded-lg transition-opacity duration-300 ${
+                    displaySrc ? 'opacity-100' : 'opacity-0'
+                  }`}
                   style={{
                     border: `2px solid ${borderColor}`,
                     transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
