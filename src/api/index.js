@@ -1,6 +1,12 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'https://solace-nam6.onrender.com/api';
+export const API_BASE_URL = 'https://solace-nam6.onrender.com/api';
+export const resolveApiUrl = (path) => {
+  const normalizedPath = path.startsWith('/api/')
+    ? path.slice(4)
+    : path;
+  return new URL(normalizedPath, API_BASE_URL).toString();
+};
 
 const api = axios.create({
   baseURL: API_BASE_URL,

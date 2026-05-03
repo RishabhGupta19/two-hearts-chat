@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { motion } from 'framer-motion';
 import { X, Edit3, Save, Trash2, Loader2 } from 'lucide-react';
-import api from '@/api';
+import api, { resolveApiUrl } from '@/api';
 import { toast } from 'sonner';
 
 // Extract dominant color from an already-loaded img element (no extra network request)
@@ -24,7 +24,120 @@ const extractColor = (imgEl) => {
   }
 };
 
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+const usePinchZoom = () => {
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const gestureRef = useRef({
+    initialDistance: 0,
+    initialScale: 1,
+    initialPosition: { x: 0, y: 0 },
+    initialCenter: { x: 0, y: 0 },
+    panOrigin: { x: 0, y: 0 },
+    lastTapAt: 0,
+    moved: false,
+  });
+
+  const reset = () => {
+    gestureRef.current.moved = false;
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  };
+
+  const getTouchMetrics = (touches) => {
+    const [first, second] = touches;
+    const dx = second.clientX - first.clientX;
+    const dy = second.clientY - first.clientY;
+    return {
+      distance: Math.hypot(dx, dy),
+      center: {
+        x: (first.clientX + second.clientX) / 2,
+        y: (first.clientY + second.clientY) / 2,
+      },
+    };
+  };
+
+  const onTouchStart = (event) => {
+    const { touches } = event;
+
+    if (touches.length === 2) {
+      const { distance, center } = getTouchMetrics(touches);
+      gestureRef.current.initialDistance = distance;
+      gestureRef.current.initialScale = scale;
+      gestureRef.current.initialPosition = position;
+      gestureRef.current.initialCenter = center;
+      gestureRef.current.moved = false;
+      return;
+    }
+
+    if (touches.length === 1 && scale > 1) {
+      const touch = touches[0];
+      gestureRef.current.panOrigin = {
+        x: touch.clientX - position.x,
+        y: touch.clientY - position.y,
+      };
+      gestureRef.current.moved = false;
+    }
+  };
+
+  const onTouchMove = (event) => {
+    const { touches } = event;
+
+    if (touches.length === 2) {
+      event.preventDefault();
+      const { distance, center } = getTouchMetrics(touches);
+      const nextScale = clamp(
+        gestureRef.current.initialScale * (distance / gestureRef.current.initialDistance),
+        1,
+        4
+      );
+      gestureRef.current.moved = true;
+      setScale(nextScale);
+      setPosition({
+        x: gestureRef.current.initialPosition.x + (center.x - gestureRef.current.initialCenter.x),
+        y: gestureRef.current.initialPosition.y + (center.y - gestureRef.current.initialCenter.y),
+      });
+      return;
+    }
+
+    if (touches.length === 1 && scale > 1) {
+      event.preventDefault();
+      const touch = touches[0];
+      gestureRef.current.moved = true;
+      setPosition({
+        x: touch.clientX - gestureRef.current.panOrigin.x,
+        y: touch.clientY - gestureRef.current.panOrigin.y,
+      });
+    }
+  };
+
+  const onTouchEnd = (event) => {
+    if (event.touches.length === 0) {
+      if (!gestureRef.current.moved) {
+        const now = Date.now();
+        if (now - gestureRef.current.lastTapAt < 300) {
+          reset();
+        }
+        gestureRef.current.lastTapAt = now;
+      }
+
+      gestureRef.current.moved = false;
+
+      if (scale === 1) {
+        setPosition({ x: 0, y: 0 });
+      }
+    }
+  };
+
+  return { scale, position, onTouchStart, onTouchMove, onTouchEnd, reset };
+};
+
 export default function LightboxWithNote({ photo, onClose, onNoteUpdate, currentUserId }) {
+  const imageSrc = photo?.id
+    ? resolveApiUrl(`/gallery/photo/${photo.id}/`)
+    : photo?.image_url;
+  const [displaySrc, setDisplaySrc] = useState('');
   const [isFlipped, setIsFlipped] = useState(false);
   const [isEditing, setIsEditing] = useState(!photo.note);
   const [noteText, setNoteText] = useState(photo.note || '');
@@ -32,6 +145,40 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
   const [borderColor, setBorderColor] = useState('rgb(168, 85, 247)');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isPhotoOwner = currentUserId && photo.uploaded_by === currentUserId;
+  const { scale, position, onTouchStart, onTouchMove, onTouchEnd, reset } = usePinchZoom();
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = null;
+
+    setDisplaySrc('');
+
+    if (!photo?.id) {
+      setDisplaySrc(photo?.image_url || '');
+      return undefined;
+    }
+
+    const loadImage = async () => {
+      try {
+        const response = await api.get(`/gallery/photo/${photo.id}/`, {
+          responseType: 'blob',
+        });
+        if (!active) return;
+        objectUrl = URL.createObjectURL(response.data);
+        setDisplaySrc(objectUrl);
+      } catch (error) {
+        console.error('Failed to load gallery image:', error);
+        if (active) setDisplaySrc(photo?.image_url || '');
+      }
+    };
+
+    loadImage();
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [photo?.id, photo?.image_url]);
 
   // Color will be extracted from the img's onLoad event below — no separate
   // Image() load needed.
@@ -88,7 +235,9 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      onClick={onClose}
+      onClick={() => {
+        if (scale === 1) onClose();
+      }}
       className="fixed top-0 left-0 w-screen h-screen z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
     >
       {/* Lightbox Card */}
@@ -207,12 +356,21 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
             >
               <div className="flex-1 overflow-hidden bg-transparent flex items-center justify-center">
                 <img
-                  src={photo.image_url}
+                  src={displaySrc || imageSrc}
                   alt="Photo"
-                  crossOrigin="anonymous"
+                  draggable={false}
+                  onTouchStart={onTouchStart}
+                  onTouchMove={onTouchMove}
+                  onTouchEnd={onTouchEnd}
+                  onDoubleClick={reset}
                   className="max-w-full max-h-full object-contain rounded-lg"
                   style={{
                     border: `2px solid ${borderColor}`,
+                    transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
+                    transformOrigin: 'center center',
+                    transition: scale === 1 ? 'transform 0.2s ease' : 'none',
+                    touchAction: 'none',
+                    userSelect: 'none',
                   }}
                   onLoad={(e) => setBorderColor(extractColor(e.currentTarget))}
                 />
@@ -287,7 +445,10 @@ export default function LightboxWithNote({ photo, onClose, onNoteUpdate, current
 
         {/* Add Note Button - Bottom */}
         {!isFlipped && (
-          <div className="flex items-center justify-center px-3 py-2 flex-shrink-0">
+          <div
+            className="flex items-center justify-center px-3 py-2 flex-shrink-0"
+            style={{ opacity: scale > 1 ? 0 : 1, transition: 'opacity 0.2s ease' }}
+          >
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
