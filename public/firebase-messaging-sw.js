@@ -381,6 +381,7 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
+  console.log("🔥 SW RECEIVED:", payload);
   if (payload.notification) return;
 
   const title = payload.data?.title || "New Message";
