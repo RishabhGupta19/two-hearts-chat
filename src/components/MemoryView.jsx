@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { X, Edit2 } from 'lucide-react';
+import api from '@/api';
 
 const MemoryView = ({ date, memory, onClose, onEdit, photoBlobs }) => {
+  const [loadedPhotos, setLoadedPhotos] = useState(new Set());
+  const [photoUrls, setPhotoUrls] = useState({});
+
   const dateObj = new Date(date + 'T00:00:00');
   const formattedDate = dateObj.toLocaleDateString('en-US', { 
     weekday: 'long', 
@@ -10,6 +14,46 @@ const MemoryView = ({ date, memory, onClose, onEdit, photoBlobs }) => {
     month: 'long', 
     day: 'numeric' 
   });
+
+  // Load photos fresh when modal opens
+  useEffect(() => {
+    setLoadedPhotos(new Set());
+    setPhotoUrls({});
+
+    if (!memory?.photo_ids?.length) return;
+
+    const loadPhotos = async () => {
+      const urls = {};
+      for (const photoId of memory.photo_ids) {
+        try {
+          const response = await api.get(`/gallery/photo/${photoId}/`, {
+            responseType: 'blob',
+          });
+          urls[photoId] = URL.createObjectURL(response.data);
+        } catch (error) {
+          console.error('Failed to load photo:', error);
+        }
+      }
+      setPhotoUrls(urls);
+    };
+
+    loadPhotos();
+
+    return () => {
+      Object.values(photoUrls).forEach((url) => {
+        if (url?.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, [memory?.date, memory?.photo_ids]);
+
+  const handlePhotoLoad = useCallback((photoId) => {
+    // Add minimum 300ms delay to ensure skeleton is visible
+    setTimeout(() => {
+      setLoadedPhotos((prev) => new Set([...prev, photoId]));
+    }, 300);
+  }, []);
 
   if (!memory) return null;
 
@@ -84,20 +128,39 @@ const MemoryView = ({ date, memory, onClose, onEdit, photoBlobs }) => {
               <div className="grid grid-cols-3 gap-3">
                 {memory.photo_ids.slice(0, 3).map((photoId, idx) => {
                   const isMorePhotos = idx === 2 && memory.photo_ids.length > 3;
+                  const isLoaded = loadedPhotos.has(photoId);
+                  const photoUrl = photoUrls[photoId];
                   return (
                     <div
                       key={photoId}
-                      className="relative aspect-square rounded-lg overflow-hidden bg-gray-100"
+                      className="relative aspect-square rounded-lg overflow-hidden"
+                      style={{ background: '#f5f5f5' }}
                     >
-                      {photoBlobs[photoId] && (
+                      {/* Loading skeleton - prominent gradient */}
+                      {!isLoaded && photoUrl && (
+                        <motion.div
+                          initial={{ opacity: 0.5 }}
+                          animate={{ opacity: 0.8 }}
+                          transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                          className="absolute inset-0 z-20"
+                          style={{
+                            background: 'linear-gradient(135deg, #e5e5e5 0%, #d0d0d0 100%)'
+                          }}
+                        />
+                      )}
+                      {photoUrl && (
                         <img
-                          src={photoBlobs[photoId]}
+                          src={photoUrl}
                           alt="memory"
-                          className="w-full h-full object-cover"
+                          className={`w-full h-full object-cover transition-all duration-300 relative z-30 ${
+                            isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+                          }`}
+                          style={{ transition: 'opacity 0.3s ease, transform 0.3s ease' }}
+                          onLoad={() => handlePhotoLoad(photoId)}
                         />
                       )}
                       {isMorePhotos && (
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-40">
                           <span className="text-white font-bold text-lg">
                             +{memory.photo_ids.length - 3}
                           </span>

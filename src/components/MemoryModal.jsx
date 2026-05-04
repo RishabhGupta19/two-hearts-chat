@@ -23,6 +23,7 @@ const MemoryModal = ({ date, memory, onClose, onSave, emojis }) => {
   const [savingMemory, setSavingMemory] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [photoBlobs, setPhotoBlobs] = useState({});
+  const [loadedPhotos, setLoadedPhotos] = useState(new Set());
 
   const dateObj = new Date(date + 'T00:00:00');
   const formattedDate = dateObj.toLocaleDateString('en-US', { 
@@ -34,6 +35,7 @@ const MemoryModal = ({ date, memory, onClose, onSave, emojis }) => {
 
   useEffect(() => {
     fetchGalleryPhotos();
+    setLoadedPhotos(new Set());
     
     // Cleanup object URLs on unmount
     return () => {
@@ -117,6 +119,13 @@ const MemoryModal = ({ date, memory, onClose, onSave, emojis }) => {
 
   const removePhoto = (photoId) => {
     setSelectedPhotos(selectedPhotos.filter(id => id !== photoId));
+  };
+
+  const handlePhotoLoad = (photoId) => {
+    // Add minimum 300ms delay to ensure skeleton is visible
+    setTimeout(() => {
+      setLoadedPhotos((prev) => new Set([...prev, photoId]));
+    }, 300);
   };
 
   const handleSave = async () => {
@@ -263,36 +272,58 @@ const MemoryModal = ({ date, memory, onClose, onSave, emojis }) => {
             {/* Gallery Photos */}
             {!loading && allPhotos.length > 0 ? (
               <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded-xl">
-                {allPhotos.map((photo) => (
-                  <motion.button
-                    key={photo.id}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => {
-                      if (selectedPhotos.includes(photo.id)) {
-                        removePhoto(photo.id);
-                      } else {
-                        setSelectedPhotos([...selectedPhotos, photo.id]);
-                      }
-                    }}
-                    className={`relative rounded-lg overflow-hidden border-2 transition-all ${
-                      selectedPhotos.includes(photo.id)
-                        ? 'border-orange-500 ring-2 ring-orange-300'
-                        : 'border-gray-300 hover:border-orange-300'
-                    }`}
-                  >
-                    <img
-                      src={photoBlobs[photo.id] || ''}
-                      alt="gallery"
-                      className="w-full aspect-square object-cover"
-                    />
-                    {selectedPhotos.includes(photo.id) && (
-                      <div className="absolute inset-0 bg-orange-500/20 flex items-center justify-center">
-                        <span className="text-white text-lg">✓</span>
-                      </div>
-                    )}
-                  </motion.button>
-                ))}
+                {allPhotos.map((photo) => {
+                  const isLoaded = loadedPhotos.has(photo.id);
+                  return (
+                    <motion.button
+                      key={photo.id}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        if (selectedPhotos.includes(photo.id)) {
+                          removePhoto(photo.id);
+                        } else {
+                          setSelectedPhotos([...selectedPhotos, photo.id]);
+                        }
+                      }}
+                      className={`relative rounded-lg overflow-hidden border-2 transition-all ${
+                        selectedPhotos.includes(photo.id)
+                          ? 'border-orange-500 ring-2 ring-orange-300'
+                          : 'border-gray-300 hover:border-orange-300'
+                      }`}
+                      style={{ background: '#f5f5f5' }}
+                    >
+                      {/* Loading skeleton */}
+                      {!isLoaded && photoBlobs[photo.id] && (
+                        <motion.div
+                          initial={{ opacity: 0.5 }}
+                          animate={{ opacity: 0.8 }}
+                          transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                          className="absolute inset-0 z-20"
+                          style={{
+                            background: 'linear-gradient(135deg, #e5e5e5 0%, #d0d0d0 100%)'
+                          }}
+                        />
+                      )}
+                      {photoBlobs[photo.id] && (
+                        <img
+                          src={photoBlobs[photo.id]}
+                          alt="gallery"
+                          className={`w-full aspect-square object-cover transition-all duration-300 relative z-30 ${
+                            isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+                          }`}
+                          style={{ transition: 'opacity 0.3s ease, transform 0.3s ease' }}
+                          onLoad={() => handlePhotoLoad(photo.id)}
+                        />
+                      )}
+                      {selectedPhotos.includes(photo.id) && (
+                        <div className="absolute inset-0 bg-orange-500/20 flex items-center justify-center z-40">
+                          <span className="text-white text-lg">✓</span>
+                        </div>
+                      )}
+                    </motion.button>
+                  );
+                })}
               </div>
             ) : loading ? (
               <div className="text-center py-6 text-gray-500 text-sm">Loading photos...</div>
@@ -308,23 +339,41 @@ const MemoryModal = ({ date, memory, onClose, onSave, emojis }) => {
               <div className="grid grid-cols-4 gap-2">
                 {selectedPhotos.map((photoId) => {
                   const photo = allPhotos.find(p => p.id === photoId);
+                  const isLoaded = loadedPhotos.has(photoId);
                   return (
                     <motion.div
                       key={photoId}
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       className="relative group"
+                      style={{ background: '#f5f5f5' }}
                     >
                       {photo && (
                         <>
+                          {/* Loading skeleton */}
+                          {!isLoaded && photoBlobs[photo.id] && (
+                            <motion.div
+                              initial={{ opacity: 0.5 }}
+                              animate={{ opacity: 0.8 }}
+                              transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                              className="absolute inset-0 z-20 rounded-lg"
+                              style={{
+                                background: 'linear-gradient(135deg, #e5e5e5 0%, #d0d0d0 100%)'
+                              }}
+                            />
+                          )}
                           <img
                             src={photoBlobs[photo.id] || ''}
                             alt="memory"
-                            className="w-full aspect-square rounded-lg object-cover"
+                            className={`w-full aspect-square rounded-lg object-cover transition-all duration-300 relative z-30 ${
+                              isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+                            }`}
+                            style={{ transition: 'opacity 0.3s ease, transform 0.3s ease' }}
+                            onLoad={() => handlePhotoLoad(photoId)}
                           />
                           <button
                             onClick={() => removePhoto(photoId)}
-                            className="absolute -top-2 -right-2 p-1 bg-orange-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute -top-2 -right-2 p-1 bg-orange-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-40"
                           >
                             <X className="h-4 w-4" />
                           </button>
