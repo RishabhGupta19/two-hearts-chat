@@ -7,11 +7,33 @@ import MemoryModal from './MemoryModal';
 import MemoryView from './MemoryView';
 import { toast } from 'sonner';
 
+const CACHED_START_DATE_KEY = 'relationship_start_date_cache';
+
+const getCachedStartDate = () => {
+  try {
+    const cached = localStorage.getItem(CACHED_START_DATE_KEY);
+    if (cached) {
+      return new Date(cached);
+    }
+  } catch (error) {
+    console.error('Error reading cached start date:', error);
+  }
+  return null;
+};
+
+const setCachedStartDate = (date) => {
+  try {
+    localStorage.setItem(CACHED_START_DATE_KEY, date.toISOString());
+  } catch (error) {
+    console.error('Error caching start date:', error);
+  }
+};
+
 const RelationshipCalendar = () => {
   const { coupleId, isLinked, user } = useApp();
   const [currentDate, setCurrentDate] = useState(new Date(2026, 4)); // May 2026
   const [isCollapsed, setIsCollapsed] = useState(true);
-  const [relationshipStartDate, setRelationshipStartDate] = useState(null);
+  const [relationshipStartDate, setRelationshipStartDate] = useState(getCachedStartDate());
   const [showStartDateModal, setShowStartDateModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
@@ -20,6 +42,8 @@ const RelationshipCalendar = () => {
   const [memories, setMemories] = useState([]);
   const [loadingMemories, setLoadingMemories] = useState(false);
   const [photoBlobs, setPhotoBlobs] = useState({});
+  const [showMonthSelector, setShowMonthSelector] = useState(false);
+  const [showYearSelector, setShowYearSelector] = useState(false);
 
   // Fetch relationship start date on mount
   useEffect(() => {
@@ -38,7 +62,9 @@ const RelationshipCalendar = () => {
     try {
       const response = await api.get('/couple/relationship-start-date');
       if (response.data.start_date) {
-        setRelationshipStartDate(new Date(response.data.start_date));
+        const startDate = new Date(response.data.start_date);
+        setRelationshipStartDate(startDate);
+        setCachedStartDate(startDate);
       } else if (user?.couple_id) {
         setShowStartDateModal(true);
       }
@@ -105,6 +131,55 @@ const RelationshipCalendar = () => {
     const months = ['January', 'February', 'March', 'April', 'May', 'June',
                     'July', 'August', 'September', 'October', 'November', 'December'];
     return months[date.getMonth()];
+  };
+
+  const getMonthAbbr = (date) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[date.getMonth()];
+  };
+
+  const getAvailableYears = () => {
+    if (!relationshipStartDate) return [];
+    const startYear = relationshipStartDate.getFullYear();
+    const endYear = new Date().getFullYear();
+    const years = [];
+    for (let y = startYear; y <= endYear; y++) {
+      years.push(y);
+    }
+    return years;
+  };
+
+  const getAvailableMonths = () => {
+    if (!relationshipStartDate) return Array.from({ length: 12 }, (_, i) => i);
+    
+    const startYear = relationshipStartDate.getFullYear();
+    const startMonth = relationshipStartDate.getMonth();
+    const endYear = new Date().getFullYear();
+    const endMonth = new Date().getMonth();
+    const currentYear = currentDate.getFullYear();
+    
+    let months = Array.from({ length: 12 }, (_, i) => i);
+    
+    if (currentYear === startYear) {
+      months = months.filter(m => m >= startMonth);
+    }
+    
+    if (currentYear === endYear) {
+      months = months.filter(m => m <= endMonth);
+    }
+    
+    return months;
+  };
+
+  const handleMonthSelect = (month) => {
+    setCurrentDate(new Date(currentDate.getFullYear(), month));
+    setShowMonthSelector(false);
+  };
+
+  const handleYearSelect = (year) => {
+    setCurrentDate(new Date(year, currentDate.getMonth()));
+    setShowYearSelector(false);
   };
 
   const isToday = (day) => {
@@ -221,6 +296,89 @@ const RelationshipCalendar = () => {
         </motion.div>
       )}
 
+      {/* Month Selector Modal */}
+      <AnimatePresence>
+        {showMonthSelector && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            onClick={() => setShowMonthSelector(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-background rounded-2xl p-6 shadow-xl max-w-sm w-full border border-border max-h-[60vh] overflow-y-auto"
+            >
+              <h2 className="text-xl font-bold text-foreground mb-4">Select Month</h2>
+              <div className="grid grid-cols-3 gap-2">
+                {['January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => {
+                  const isAvailable = getAvailableMonths().includes(idx);
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => isAvailable && handleMonthSelect(idx)}
+                      disabled={!isAvailable}
+                      className={`py-2 px-3 rounded-lg font-medium transition-colors ${
+                        isAvailable
+                          ? currentDate.getMonth() === idx
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-orange-100 dark:bg-orange-900/30 text-foreground hover:bg-orange-200 dark:hover:bg-orange-900/50'
+                          : 'opacity-30 cursor-not-allowed bg-gray-200 dark:bg-gray-700 text-muted-foreground'
+                      }`}
+                    >
+                      {month.slice(0, 3)}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Year Selector Modal */}
+      <AnimatePresence>
+        {showYearSelector && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            onClick={() => setShowYearSelector(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-background rounded-2xl p-6 shadow-xl max-w-sm w-full border border-border max-h-[60vh] overflow-y-auto"
+            >
+              <h2 className="text-xl font-bold text-foreground mb-4">Select Year</h2>
+              <div className="grid grid-cols-3 gap-2">
+                {getAvailableYears().map((year) => (
+                  <button
+                    key={year}
+                    onClick={() => handleYearSelect(year)}
+                    className={`py-2 px-3 rounded-lg font-medium transition-colors ${
+                      currentDate.getFullYear() === year
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-orange-100 dark:bg-orange-900/30 text-foreground hover:bg-orange-200 dark:hover:bg-orange-900/50'
+                    }`}
+                  >
+                    {year}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Calendar Card */}
       <motion.div
         className="bg-[#fff8f2] dark:bg-orange-950/20 rounded-2xl border border-orange-200/50 dark:border-orange-900/30 overflow-hidden"
@@ -230,9 +388,26 @@ const RelationshipCalendar = () => {
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="w-full flex items-center justify-between p-6 hover:bg-orange-100/30 dark:hover:bg-orange-900/10 transition-colors"
         >
-          <span className="font-semibold text-foreground">
-            {monthName} {currentDate.getFullYear()}
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMonthSelector(true);
+              }}
+              className="font-semibold text-foreground hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+            >
+              {getMonthAbbr(currentDate)}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowYearSelector(true);
+              }}
+              className="font-semibold text-foreground hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+            >
+              {currentDate.getFullYear()}
+            </button>
+          </div>
           <div className="flex items-center gap-3">
             <span className="bg-[#fdeee4] text-[#c09070] text-sm font-medium px-[18px] py-2 rounded-full inline-block">
               {daysTogether !== null ? `${daysTogether} days together` : 'Loading...'}
