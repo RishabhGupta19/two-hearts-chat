@@ -1,20 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import api, { resolveApiUrl } from '@/api';
 
-// ── Cloudinary URL transforms ─────────────────────────────────────────────────
-// Inject transformation params into Cloudinary URLs for optimized delivery.
-// e.g. .../upload/v123/photo.jpg → .../upload/f_auto,q_auto,w_300/v123/photo.jpg
-const cloudinaryThumb = (url, width = 300) => {
-  if (!url) return url;
-  try {
-    return url.replace(
-      /\/upload\/(?:v\d+\/)?/,
-      (match) => `/upload/f_auto,q_auto,w_${width},c_fill/${match.replace('/upload/', '')}`
-    );
-  } catch {
-    return url;
-  }
-};
+const getPhotoSrc = (photoId, fallbackUrl = '') =>
+  photoId ? resolveApiUrl(`/gallery/photo/${photoId}/`) : fallbackUrl;
 
 // ── Dominant color cache (avoids re-computing on every render) ─────────────────
 const colorCache = new Map();
@@ -52,24 +41,57 @@ const extractDominantColor = (imgElement, imageUrl) => {
 
 // ── PhotoTile ─────────────────────────────────────────────────────────────────
 export default function PhotoTile({ photo, onClick }) {
+  const imageSrc = getPhotoSrc(photo?.id, photo?.image_url || '');
+  const [displaySrc, setDisplaySrc] = useState('');
   const [borderColor, setBorderColor] = useState(
-    () => colorCache.get(photo?.image_url) || 'rgb(168, 85, 247)'
+    () => colorCache.get(imageSrc) || 'rgb(168, 85, 247)'
   );
   const [loaded, setLoaded] = useState(false);
   const imgRef = useRef(null);
 
+  useEffect(() => {
+    let active = true;
+    let objectUrl = null;
+
+    setLoaded(false);
+    setDisplaySrc('');
+
+    if (!photo?.id) {
+      setDisplaySrc(photo?.image_url || '');
+      return undefined;
+    }
+
+    const loadImage = async () => {
+      try {
+        const response = await api.get(`/gallery/photo/${photo.id}/`, {
+          responseType: 'blob',
+        });
+        if (!active) return;
+        objectUrl = URL.createObjectURL(response.data);
+        setDisplaySrc(objectUrl);
+      } catch (error) {
+        console.error('Failed to load gallery image:', error);
+        if (active) setDisplaySrc(photo?.image_url || '');
+      }
+    };
+
+    loadImage();
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [photo?.id, photo?.image_url]);
+
   const handleImageLoad = useCallback(() => {
     setLoaded(true);
-    if (imgRef.current && photo?.image_url) {
-      const color = extractDominantColor(imgRef.current, photo.image_url);
+    if (imgRef.current && displaySrc) {
+      const color = extractDominantColor(imgRef.current, displaySrc);
       setBorderColor(color);
     }
-  }, [photo?.image_url]);
+  }, [displaySrc]);
 
   if (!photo) return null;
-
-  // Use optimized thumbnail URL for the grid
-  const thumbUrl = cloudinaryThumb(photo.image_url, 300);
 
   return (
     <motion.div
@@ -79,27 +101,28 @@ export default function PhotoTile({ photo, onClick }) {
       className="cursor-pointer relative"
     >
       <div
-        className="aspect-square rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow"
+        className="aspect-square rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow relative"
         style={{
           border: `3px solid ${borderColor}`,
           boxShadow: `0 0 8px ${borderColor}80, ${borderColor === 'rgb(168, 85, 247)' ? '' : '0 4px 12px rgba(0, 0, 0, 0.15)'}`,
           background: 'hsl(var(--muted))',
         }}
       >
-        {/* Blurred low-res placeholder */}
+        {/* Enhanced loading skeleton */}
         {!loaded && (
-          <div
-            className="absolute inset-0 animate-pulse"
-            style={{ background: 'hsl(var(--muted))' }}
+          <motion.div
+            initial={{ opacity: 0.4 }}
+            animate={{ opacity: 0.7 }}
+            transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+            className="absolute inset-0 bg-gradient-to-br from-muted to-muted-foreground/20 z-10"
           />
         )}
         <img
           ref={imgRef}
-          src={thumbUrl}
+          src={displaySrc}
           alt="Gallery"
           loading="lazy"
           decoding="async"
-          crossOrigin="anonymous"
           className={`w-full h-full object-cover transition-all duration-300 ${
             loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
           }`}

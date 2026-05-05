@@ -101,6 +101,8 @@ const defaultState = {
   partnerProfilePic: localStorage.getItem('partnerProfilePic') || null,
   mode: localStorage.getItem('chat_mode') || 'calm',
   messages: [],
+  messagesPrefetched: false,
+  messagesPrefetchHasMore: true,
   goals: [],
   currentSong: persistedMusicState?.currentSong || null,
   currentQueue: persistedMusicState?.currentQueue || [],
@@ -142,12 +144,31 @@ const mergeUniqueById = (existing, incoming) => {
   return sortMessagesAsc(out);
 };
 
+// Strip raw Fernet ciphertext that may leak through if the backend key is
+// unavailable locally or a stale cache entry slips through. Returns a readable
+// placeholder so the UI never renders raw base64 tokens.
+const stripEncryptedText = (value) => {
+  if (typeof value === 'string' && value.startsWith('enc:')) {
+    return '🔒 Message could not be decrypted';
+  }
+  return value;
+};
+
 const readRecentCache = (mode) => {
   try {
     const raw = localStorage.getItem(`chat_recent_${mode}`);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+
+    const hasEncryptedPayload = parsed.some((message) => {
+      const values = [message?.text, message?.reply_to?.text, message?.replyTo?.text];
+      return values.some((value) => typeof value === 'string' && value.startsWith('enc:'));
+    });
+
+    // Old cached windows from before encryption/decryption was normalized can
+    // replay ciphertext into the UI. Drop those stale snapshots and refetch.
+    return hasEncryptedPayload ? [] : parsed;
   } catch {
     return [];
   }
@@ -155,7 +176,13 @@ const readRecentCache = (mode) => {
 
 const writeRecentCache = (mode, messages) => {
   try {
-    localStorage.setItem(`chat_recent_${mode}`, JSON.stringify((messages || []).slice(-40)));
+    // Never persist raw ciphertext — filter any enc: blobs before writing so a
+    // single bad API response can't poison future cache reads.
+    const safe = (messages || []).filter((m) => {
+      const values = [m?.text, m?.reply_to?.text, m?.replyTo?.text];
+      return !values.some((v) => typeof v === 'string' && v.startsWith('enc:'));
+    });
+    localStorage.setItem(`chat_recent_${mode}`, JSON.stringify(safe.slice(-40)));
   } catch {
     // ignore storage errors
   }
@@ -167,9 +194,16 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
   const isOwnedByCurrentUser = currentUserId && senderId
     ? String(senderId) === String(currentUserId)
     : null;
-  const replyTo = message?.replyTo || (message?.reply_to?.id && message?.reply_to?.text
+
+  // Sanitise text fields — strip raw ciphertext that can leak through when the
+  // local backend key is mismatched or a stale cache entry is replayed.
+  const safeText = stripEncryptedText(message?.text ?? '');
+  const replyToRaw = message?.replyTo || (message?.reply_to?.id && message?.reply_to?.text
     ? { messageId: message.reply_to.id, text: message.reply_to.text }
     : null);
+  const replyTo = replyToRaw
+    ? { ...replyToRaw, text: stripEncryptedText(replyToRaw.text ?? '') }
+    : null;
 
   if (mode === 'calm') {
     const isMine = hasExplicitOwnership
@@ -183,6 +217,7 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
 
     return {
       ...message,
+      text: safeText,
       replyTo,
       is_deleted: Boolean(message?.is_deleted),
       isMine,
@@ -208,6 +243,7 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
 
   return {
     ...message,
+    text: safeText,
     replyTo,
     is_deleted: Boolean(message?.is_deleted),
     isMine,
@@ -217,6 +253,32 @@ const normalizeChatMessage = (message, currentUserId, mode) => {
 
 export const AppProvider = ({ children }) => {
   const [state, setState] = useState(defaultState);
+
+  // ── Background API prefetch ─────────────────────────────────────────────
+  // Defined as a useCallback so it can be called at boot AND reactively
+  // whenever a foreground FCM push signals that new messages have arrived
+  // (e.g. user is on Dashboard/Music — WebSocket is not active).
+  const prefetchMessages = useCallback(async (mode) => {
+    try {
+      const { data } = await api.get('/messages', { params: { mode, limit: 50 } });
+      setState((s) => {
+        const currentUserId = s.user?.id || '';
+        const normalized = (data.messages || data).map((message) =>
+          normalizeChatMessage(message, currentUserId, mode)
+        );
+        writeRecentCache(mode, normalized);
+        return {
+          ...s,
+          messages: sortMessagesAsc(normalized),
+          messagesPrefetched: true,
+          messagesPrefetchHasMore: Boolean(data?.has_more),
+        };
+      });
+    } catch (e) {
+      // Prefetch failure is non-fatal — Chat will handle its own fetch
+      console.warn('Background message prefetch failed:', e?.message);
+    }
+  }, []);
 
   // -------------------------------------------------------------------------
   // On mount: optimistically hydrate from the cached user snapshot so the
@@ -231,6 +293,25 @@ export const AppProvider = ({ children }) => {
       return;
     }
 
+    // ── Prefetch messages immediately from localStorage cache ────────────
+    // This runs synchronously before any network call so messages are already
+    // in state by the time the user navigates to Chat.
+    const currentMode = localStorage.getItem('chat_mode') || 'calm';
+    const cachedMessages = readRecentCache(currentMode);
+    if (cachedMessages.length) {
+      setState((s) => ({
+        ...s,
+        messages: sortMessagesAsc(cachedMessages),
+        messagesPrefetched: true, // cache hit — Chat can skip its own fetch
+        messagesPrefetchHasMore: true, // unknown yet, Chat will re-check on scroll
+      }));
+    }
+
+    // ── Background API prefetch ───────────────────────────────────────────
+    // prefetchMessages is defined above as a useCallback so it can also be
+    // called from the foreground push handler. Call it here for the initial
+    // boot fetch in parallel with authentication.
+
     // Hydrate from cache immediately — removes the full-screen spinner on
     // every cold start / PWA resume.
     const cached = readCachedUser();
@@ -238,7 +319,9 @@ export const AppProvider = ({ children }) => {
       // Apply cached snapshot so the UI renders without waiting on the network.
       syncUserState(cached);
       // Then verify in the background; syncUserState will update on success.
+      // Also kick off message prefetch in parallel.
       (async () => {
+        prefetchMessages(currentMode);
         const user = await fetchUser();
         if (user) {
           try {
@@ -249,7 +332,7 @@ export const AppProvider = ({ children }) => {
         }
       })();
     } else {
-      // No cache — show spinner until network resolves.
+      // No cache — show spinner until network resolves, then prefetch.
       (async () => {
         const user = await fetchUser();
         try {
@@ -257,6 +340,8 @@ export const AppProvider = ({ children }) => {
         } catch (e) {
           console.warn('Failed to request notification permission on mount', e);
         }
+        // Prefetch after auth so we have a valid token
+        prefetchMessages(currentMode);
       })();
     }
 
@@ -507,6 +592,9 @@ export const AppProvider = ({ children }) => {
         return {
           ...s,
           messages: sortMessagesAsc(normalized),
+          // Mark as prefetched so Chat knows data is fresh from API
+          messagesPrefetched: true,
+          messagesPrefetchHasMore: Boolean(data?.has_more),
         };
       });
       return {
@@ -518,6 +606,12 @@ export const AppProvider = ({ children }) => {
       console.error('Failed to fetch messages:', e);
       return { hasMore: false, loaded: 0, oldestTimestamp: null };
     }
+  }, []);
+
+  // Called by Chat after it consumes the prefetched data, so a mode-switch
+  // or re-mount re-fetches fresh data for that mode.
+  const clearMessagesPrefetch = useCallback(() => {
+    setState((s) => ({ ...s, messagesPrefetched: false, messagesPrefetchHasMore: true }));
   }, []);
 
   const loadOlderMessages = useCallback(async (mode, before) => {
@@ -599,6 +693,12 @@ export const AppProvider = ({ children }) => {
             }
           }).catch((err) => console.error('Service worker not ready for notifications', err));
         }
+
+        // Re-fetch messages so the new message appears in state immediately,
+        // even when the user is on another page and the WebSocket is inactive.
+        // This prevents the stale-cache bug where Chat shows prefetched data
+        // from boot and misses messages that arrived while the user was away.
+        prefetchMessages('calm').catch(() => {});
       } catch (err) {
         console.error('Error showing foreground notification', err);
       }
@@ -607,7 +707,7 @@ export const AppProvider = ({ children }) => {
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, []);
+  }, [prefetchMessages]);
 
   const sendMessage = useCallback(async (text) => {
     try {
@@ -674,7 +774,13 @@ export const AppProvider = ({ children }) => {
       if (incomingId) {
         const byId = next.findIndex((m) => String(m?.id || '') === incomingId);
         if (byId !== -1) {
-          next[byId] = { ...next[byId], ...normalized, pending: false };
+          // Preserve the trusted isMine from the existing entry — the echo's
+          // freshly computed isMine can be wrong if s.user is stale at this
+          // instant, which causes 1-2 messages to flip sides.
+          const trustedIsMine = typeof next[byId]?.isMine === 'boolean'
+            ? next[byId].isMine
+            : normalized.isMine;
+          next[byId] = { ...next[byId], ...normalized, isMine: trustedIsMine, sender: trustedIsMine ? 'user' : 'partner', pending: false };
           return { ...s, messages: next };
         }
       }
@@ -685,9 +791,15 @@ export const AppProvider = ({ children }) => {
         );
         if (byTemp !== -1) {
           const stableLocalKey = next[byTemp]?.local_key || incomingTempId;
+          // Same: trust the isMine we set when the message was created optimistically.
+          const trustedIsMine = typeof next[byTemp]?.isMine === 'boolean'
+            ? next[byTemp].isMine
+            : normalized.isMine;
           next[byTemp] = {
             ...next[byTemp],
             ...normalized,
+            isMine: trustedIsMine,
+            sender: trustedIsMine ? 'user' : 'partner',
             local_key: stableLocalKey,
             pending: false,
           };
@@ -705,9 +817,14 @@ export const AppProvider = ({ children }) => {
 
         if (pendingIdx !== undefined) {
           const stableLocalKey = next[pendingIdx]?.local_key || next[pendingIdx]?.client_temp_id || next[pendingIdx]?.id;
+          const trustedIsMine = typeof next[pendingIdx]?.isMine === 'boolean'
+            ? next[pendingIdx].isMine
+            : normalized.isMine;
           next[pendingIdx] = {
             ...next[pendingIdx],
             ...normalized,
+            isMine: trustedIsMine,
+            sender: trustedIsMine ? 'user' : 'partner',
             local_key: stableLocalKey,
             pending: false,
           };
@@ -854,12 +971,15 @@ export const AppProvider = ({ children }) => {
 
   const playNextTrack = useCallback(() => {
     setState((s) => {
-      if (s.currentIndex >= s.currentQueue.length - 1) return s;
+      const qLen = s.currentQueue.length;
+      if (qLen === 0) return s;
+      // If there is a next track, advance; otherwise stay (do not loop)
+      if (s.currentIndex >= qLen - 1) return s; // already at last track
       const nextIndex = s.currentIndex + 1;
       return {
         ...s,
         currentIndex: nextIndex,
-        currentSong: s.currentQueue[nextIndex] || s.currentSong,
+        currentSong: s.currentQueue[nextIndex],
         musicPosition: 0,
         musicWasPlaying: true,
       };
@@ -868,12 +988,14 @@ export const AppProvider = ({ children }) => {
 
   const playPrevTrack = useCallback(() => {
     setState((s) => {
-      if (s.currentIndex <= 0) return s;
+      const qLen = s.currentQueue.length;
+      if (qLen === 0) return s;
+      if (s.currentIndex <= 0) return s; // already at first track
       const prevIndex = s.currentIndex - 1;
       return {
         ...s,
         currentIndex: prevIndex,
-        currentSong: s.currentQueue[prevIndex] || s.currentSong,
+        currentSong: s.currentQueue[prevIndex],
         musicPosition: 0,
         musicWasPlaying: true,
       };
@@ -957,6 +1079,7 @@ export const AppProvider = ({ children }) => {
         playNextTrack,
         playPrevTrack,
         closeMusicPlayer,
+        clearMessagesPrefetch,
         updateMusicPlayback,
         deleteMessage,
         searchMessages,

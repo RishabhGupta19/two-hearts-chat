@@ -29,7 +29,7 @@ export const saveToLibrary = async (song) => {
     title:        song.title,
     channelTitle: song.channelTitle || '',
     thumbnail:    song.thumbnail    || '',
-    audioUrl:     song.audioUrl     || '',
+    audioUrl:     song.audioUrl     || '', // direct CDN URL for background playback
   });
   return data; // the serialised song (or existing one if duplicate)
 };

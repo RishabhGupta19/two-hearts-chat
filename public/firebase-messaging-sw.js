@@ -45,7 +45,6 @@
 // };
 
 // messaging.onBackgroundMessage(async (payload) => {
-
 //   // If browser auto-delivers a notification payload, do not render manually.
 //   if (payload?.notification) {
 //     return;
@@ -57,7 +56,6 @@
 //   if (hasVisibleClient) {
 //     return;
 //   }
-
 
 //   const title = payload.notification?.title || payload.data?.title || "New Message";
 //   const body = payload.notification?.body || payload.data?.body || "";
@@ -90,9 +88,7 @@
 //   self.registration.showNotification(title, options);
 // });
 
-// // Ensure we display notifications when the browser emits a 'push' event directly.
-// // Some FCM payloads arrive as raw push events and may contain a notification/data
-// // structure that the compat layer doesn't auto-show in all cases.
+// // Enhanced push event listener with vibration, persistence, and custom behavior
 // self.addEventListener('push', (event) => {
 //   if (!event.data) return;
 
@@ -116,7 +112,7 @@
 
 //     const notification = data.notification || {};
 //     const payload = data.data || {};
-//     const title = notification.title || payload.title || 'Solace';
+//     const title = notification.title || payload.title || 'Two Hearts';
 //     const body = notification.body || payload.body || '';
 
 //     const dedupeKey = makeDedupeKey({ data: payload, messageId: data?.messageId }, title, body);
@@ -136,9 +132,14 @@
 //         ...(payload || {}),
 //         url: payload.url || '/#/chat',
 //       },
-//       tag: String(dedupeKey || 'solace-message'),
+//       tag: String(dedupeKey || 'two-hearts-message'),
 //       renotify: false,
+//       // Vibration pattern: [vibrate, pause, vibrate]
 //       vibrate: [200, 100, 200],
+//       // Keep notification persistent until user interacts
+//       requireInteraction: true,
+//       // Allow the browser to show sound
+//       silent: false,
 //     };
 
 //     await self.registration.showNotification(title, options);
@@ -168,19 +169,200 @@
 //   );
 // });
 
-//   // Suppress Chrome's automatic "This site has been updated in the background"
-//   // toast by responding to a skipWaiting message sent from the page.
-//   self.addEventListener('message', (event) => {
-//     try {
-//       if (!event || !event.data) return;
-//       if (event.data === 'skipWaiting') {
-//         self.skipWaiting();
-//       }
-//     } catch (err) {
-//       // Guard against unexpected message payloads
-//       console.warn('SW message handler error', err);
+// // Suppress Chrome's automatic "This site has been updated in the background"
+// // toast by responding to a skipWaiting message sent from the page.
+// self.addEventListener('message', (event) => {
+//   try {
+//     if (!event || !event.data) return;
+//     if (event.data === 'skipWaiting') {
+//       self.skipWaiting();
 //     }
+//   } catch (err) {
+//     // Guard against unexpected message payloads
+//     console.warn('SW message handler error', err);
+//   }
+// });
+
+// self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
+
+// // Heartbeat flag for pages to signal they're active (more reliable on mobile PWAs)
+// let appIsActive = false;
+// let appActiveTimer = null;
+// // Recently seen message ids (populated by pages via postMessage)
+// const recentSeen = new Map();
+// const handledNotifications = new Map();
+
+// const makeDedupeKey = (payload, title, body) => {
+//   return (
+//     payload?.data?.message_id ||
+//     payload?.data?.messageId ||
+//     payload?.data?.notification_id ||
+//     payload?.messageId ||
+//     `${title || ''}::${body || ''}`
+//   );
+// };
+
+// const markHandled = (key) => {
+//   if (!key) return false;
+//   const now = Date.now();
+//   const prev = handledNotifications.get(key);
+//   if (prev && now - prev < 30000) return true;
+//   handledNotifications.set(key, now);
+//   for (const [k, ts] of handledNotifications.entries()) {
+//     if (now - ts > 120000) handledNotifications.delete(k);
+//   }
+//   return false;
+// };
+
+// const showBackgroundNotification = async (payload) => {
+//   if (!payload || payload?.notification) return;
+
+//   const title = payload.data?.title || 'New message 💬';
+//   const body = payload.data?.body || '';
+//   const dedupeKey = makeDedupeKey(payload, title, body);
+
+//   if (markHandled(dedupeKey)) return;
+
+//   try {
+//     const clientsList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+//     const hasVisibleClient = clientsList.some((client) => client.visibilityState === 'visible');
+//     if (hasVisibleClient && appIsActive) return;
+//   } catch (e) {
+//     // Ignore client visibility errors and continue with the notification.
+//   }
+
+//   if (payload.data?.message_id) {
+//     await new Promise((r) => setTimeout(r, 800));
+//     if (recentSeen.has(String(payload.data.message_id))) return;
+//   }
+
+//   try {
+//     const existing = await self.registration.getNotifications({ tag: String(dedupeKey) });
+//     existing.forEach((n) => n.close());
+//   } catch (e) { /* ignore */ }
+
+//   await self.registration.showNotification(title, {
+//     body,
+//     icon: '/icon-192.png',
+//     tag: String(dedupeKey),
+//     renotify: true,
+//     requireInteraction: true,
+//     silent: false,
+//     vibrate: [200, 100, 200],
+//     data: {
+//       url: payload.data?.url || '/#/chat',
+//       ...(payload.data || {}),
+//     },
 //   });
+// };
+
+// self.addEventListener('message', (event) => {
+//   try {
+//     if (!event || !event.data) return;
+//     if (event.data === 'skipWaiting') {
+//       self.skipWaiting();
+//       return;
+//     }
+
+//     if (event.data?.type === 'APP_ACTIVE') {
+//       appIsActive = true;
+//       if (appActiveTimer) clearTimeout(appActiveTimer);
+//       // Auto-expire in case the page closes without sending APP_INACTIVE
+//       appActiveTimer = setTimeout(() => { appIsActive = false; }, 20000);
+//       return;
+//     }
+
+//     if (event.data?.type === 'APP_INACTIVE') {
+//       appIsActive = false;
+//       if (appActiveTimer) { clearTimeout(appActiveTimer); appActiveTimer = null; }
+//       return;
+//     }
+
+//     if (event.data?.type === 'MSG_SEEN') {
+//       try {
+//         const ids = Array.isArray(event.data?.message_ids) ? event.data.message_ids : [];
+//         const seenSet = new Set(ids.map(String));
+
+//         for (const id of ids) {
+//           const key = String(id);
+//           recentSeen.set(key, Date.now());
+//           // Auto-expire after 20s
+//           setTimeout(() => recentSeen.delete(key), 20000);
+//         }
+
+//         // Dismiss any open OS notifications whose message matches a seen id.
+//         // Notifications are tagged with the message_id (dedupeKey), and their
+//         // data payload also carries message_id / notification_id.
+//         if (seenSet.size > 0) {
+//           self.registration.getNotifications().then((openNotifications) => {
+//             for (const n of openNotifications) {
+//               const msgId   = String(n.data?.message_id   || '');
+//               const notifId = String(n.data?.notification_id || '');
+//               const tag     = String(n.tag || '');
+//               if (
+//                 (msgId   && seenSet.has(msgId))   ||
+//                 (notifId && seenSet.has(notifId)) ||
+//                 (tag     && seenSet.has(tag))
+//               ) {
+//                 n.close();
+//               }
+//             }
+//           }).catch(() => { /* getNotifications not supported — ignore */ });
+//         }
+//       } catch (err) {
+//         // ignore
+//       }
+//       return;
+//     }
+//   } catch (err) {
+//     console.warn('SW message handler error', err);
+//   }
+// });
+
+// const messaging = firebase.messaging();
+
+// messaging.onBackgroundMessage(async (payload) => {
+//   await showBackgroundNotification(payload);
+// });
+
+// self.addEventListener('push', (event) => {
+//   if (!event.data) return;
+
+//   event.waitUntil((async () => {
+//     let payload = {};
+//     try {
+//       payload = event.data.json();
+//     } catch (e) {
+//       try {
+//         payload = { data: { body: String(event.data) } };
+//       } catch (_) {
+//         payload = {};
+//       }
+//     }
+
+//     await showBackgroundNotification(payload);
+//   })());
+// });
+
+// self.addEventListener('notificationclick', (event) => {
+//   event.notification.close();
+//   const rawUrl = event.notification.data?.url || '/#/chat';
+//   // Ensure we open an absolute URL so the SPA router mounts correctly.
+//   const url = new URL(rawUrl, self.location.origin).href;
+//   event.waitUntil(
+//     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+//       for (const client of list) {
+//         if (client.url.includes(self.location.origin) && 'focus' in client) {
+//           client.focus();
+//           client.navigate(url);
+//           return;
+//         }
+//       }
+//       if (clients.openWindow) return clients.openWindow(url);
+//     })
+//   );
+// });
+
 
 
 
@@ -190,138 +372,49 @@ importScripts('https://www.gstatic.com/firebasejs/10.0.0/firebase-messaging-comp
 firebase.initializeApp({
   apiKey: "AIzaSyCh16O9yRk67y2xkt-wMYqfbXgiZmgtOzQ",
   authDomain: "us-two-2cd86.firebaseapp.com",
-  projectId: "us-two-2cd86",
-  storageBucket: "us-two-2cd86.firebasestorage.app",
-  messagingSenderId: "234836871171",
-  appId: "1:234836871171:web:48d7864696f537fda2e636",
-});
-
-self.addEventListener('install', () => self.skipWaiting());
-
-self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
-
-// Heartbeat flag for pages to signal they're active (more reliable on mobile PWAs)
-let appIsActive = false;
-let appActiveTimer = null;
-// Recently seen message ids (populated by pages via postMessage)
-const recentSeen = new Map();
-
-self.addEventListener('message', (event) => {
-  try {
-    if (!event || !event.data) return;
-    if (event.data === 'skipWaiting') {
-      self.skipWaiting();
-      return;
-    }
-
-    if (event.data?.type === 'APP_ACTIVE') {
-      appIsActive = true;
-      if (appActiveTimer) clearTimeout(appActiveTimer);
-      // Auto-expire in case the page closes without sending APP_INACTIVE
-      appActiveTimer = setTimeout(() => { appIsActive = false; }, 20000);
-      return;
-    }
-
-    if (event.data?.type === 'APP_INACTIVE') {
-      appIsActive = false;
-      if (appActiveTimer) { clearTimeout(appActiveTimer); appActiveTimer = null; }
-      return;
-    }
-
-    if (event.data?.type === 'MSG_SEEN') {
-      try {
-        const ids = Array.isArray(event.data?.message_ids) ? event.data.message_ids : [];
-        for (const id of ids) {
-          const key = String(id);
-          recentSeen.set(key, Date.now());
-          // Auto-expire after 20s
-          setTimeout(() => recentSeen.delete(key), 20000);
-        }
-      } catch (err) {
-        // ignore
-      }
-      return;
-    }
-  } catch (err) {
-    console.warn('SW message handler error', err);
-  }
+   projectId: "us-two-2cd86",
+   storageBucket: "us-two-2cd86.firebasestorage.app",
+   messagingSenderId: "234836871171",
+   appId: "1:234836871171:web:48d7864696f537fda2e636",
 });
 
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage(async (payload) => {
-  // Skip if browser auto-displays (has notification block)
-  if (payload?.notification) return;
+messaging.onBackgroundMessage((payload) => {
+  console.log("🔥 SW RECEIVED:", payload);
+  if (payload.notification) return;
 
-  // Wait briefly to give any foreground client a chance to report the message as seen
-  const DELAY_MS = 800;
-  const messageId = payload.data?.message_id || payload.data?.messageId || payload.data?.notification_id || null;
+  const title = payload.data?.title || "New Message";
+  const body = payload.data?.body || "";
 
-  if (messageId) {
-    await new Promise((r) => setTimeout(r, DELAY_MS));
-    if (recentSeen.has(String(messageId))) return;
-  } else {
-    // No explicit id — only suppress if no app window is open at all
-    await new Promise((r) => setTimeout(r, DELAY_MS));
-    try {
-      const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-      // Only skip if ALL clients are visible (user is actively looking at the app)
-      const allVisible = allClients.length > 0 && allClients.every((c) => c.visibilityState === 'visible');
-      if (allVisible && appIsActive) return;
-    } catch (e) {
-      // ignore matchAll errors
-    }
-  }
-
-  const title = payload.data?.title || 'New message 💬';
-  const body = payload.data?.body || '';
-  const tag = payload.data?.message_id
-    || payload.data?.notification_id
-    || payload.data?.messageId
-    || `${title}::${body}`;
-
-  // Close existing notifications with same tag before showing new one
-  try {
-    const existing = await self.registration.getNotifications({ tag: String(tag) });
-    existing.forEach((n) => n.close());
-  } catch (e) { /* ignore */ }
-
-  await self.registration.showNotification(title, {
+  self.registration.showNotification(title, {
     body,
-    icon: '/icon-192.png',
-    // badge omitted — badge-72.png doesn't exist in public/
-    tag: String(tag),
-    renotify: true,
-    requireInteraction: true,
-    silent: false,
-    vibrate: [200, 100, 200],
+    icon: "/icon-192.png",
     data: {
-      url: payload.data?.url || '/#/chat',
-      ...(payload.data || {}),
-    },
+      url: payload.data?.url || "/#/chat"
+    }
   });
-});
-
-// ✅ Block push event entirely — onBackgroundMessage is the only display path
-self.addEventListener('push', (event) => {
-  event.waitUntil(Promise.resolve());
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const rawUrl = event.notification.data?.url || '/#/chat';
-  // Ensure we open an absolute URL so the SPA router mounts correctly.
-  const url = new URL(rawUrl, self.location.origin).href;
+
+  const url = new URL(
+    event.notification.data?.url || "/#/chat",
+    self.location.origin
+  ).href;
+
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      for (const client of list) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.focus();
-          client.navigate(url);
-          return;
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientsArr) => {
+        for (const client of clientsArr) {
+          if ('focus' in client) {
+            client.focus();
+            client.navigate(url);
+            return;
+          }
         }
-      }
-      if (clients.openWindow) return clients.openWindow(url);
-    })
+        return clients.openWindow(url);
+      })
   );
 });

@@ -7,6 +7,7 @@ import { Copy, Check, X, Heart, Users, UserPlus, Loader2, Link } from 'lucide-re
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import ProfilePicUpload from '@/components/ProfilePicUpload';
+import RelationshipCalendar from '@/components/RelationshipCalendar';
 import api from '@/api';
 
 const Dashboard = () => {
@@ -399,6 +400,18 @@ const Dashboard = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+        {/* Relationship Calendar */}
+        {isLinked && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="mb-12"
+          >
+            <RelationshipCalendar />
+          </motion.div>
+        )}
 
         {/* CTA Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

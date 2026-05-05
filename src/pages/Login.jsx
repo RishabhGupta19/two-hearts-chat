@@ -96,6 +96,20 @@ const Login = () => {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+
+              {/*  THIS is for forgot password feature */}
+                {!isSignup && (
+                  <div className="text-right mt-1">
+                    <button
+                      type="button"
+                      onClick={() => navigate('/forgot-password')}
+                      className="text-xs text-primary hover:underline font-medium"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+                )}
+
             </div>
 
             {error && (
